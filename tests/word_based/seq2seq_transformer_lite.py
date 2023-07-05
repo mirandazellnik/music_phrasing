@@ -199,8 +199,8 @@ class TransformerDecoder(layers.Layer):
         )
         return tf.tile(mask, mult)
 
-embed_dim = 8
-latent_dim = 32
+embed_dim = 64
+latent_dim = 256
 num_heads = 8
 
 encoder_inputs = keras.Input(shape=(None,), dtype="int64", name="encoder_inputs")
@@ -217,18 +217,30 @@ decoder_outputs = layers.Dense(vocab_size, activation="softmax")(x)
 decoder = keras.Model([decoder_inputs, encoded_seq_inputs], decoder_outputs)
 
 decoder_outputs = decoder([decoder_inputs, encoder_outputs])
-transformer = keras.Model(
+
+train = True
+
+if train:
+    transformer = keras.Model(
+        [encoder_inputs, decoder_inputs], decoder_outputs, name="transformer"
+    )
+
+    epochs = 30  # This should be at least 30 for convergence
+
+    transformer.summary()
+    transformer.compile(
+        "rmsprop", loss="sparse_categorical_crossentropy", metrics=["accuracy"]
+    )
+    transformer.fit(train_ds, epochs=epochs, validation_data=val_ds)
+    transformer.save_weights("new_s2s_weights/weights")
+
+    #transformer = keras.models.load_model("new_s2s_lite")
+
+transformer = transformer = keras.Model(
     [encoder_inputs, decoder_inputs], decoder_outputs, name="transformer"
 )
+transformer.load_weights("new_s2s_weights/weights")
 
-epochs = 30  # This should be at least 30 for convergence
-
-transformer.summary()
-transformer.compile(
-    "rmsprop", loss="sparse_categorical_crossentropy", metrics=["accuracy"]
-)
-transformer.fit(train_ds, epochs=epochs, validation_data=val_ds)
-transformer.save("new_s2s_lite")
 
 spa_vocab = spa_vectorization.get_vocabulary()
 spa_index_lookup = dict(zip(range(len(spa_vocab)), spa_vocab))
@@ -252,7 +264,7 @@ def decode_sequence(input_sentence):
 
 
 test_eng_texts = [pair[0] for pair in test_pairs]
-for _ in range(30):
+for _ in range(5):
     input_sentence = random.choice(test_eng_texts)
     translated = decode_sequence(input_sentence)
     print(f"IN: {input_sentence}    OUT: {translated}")
