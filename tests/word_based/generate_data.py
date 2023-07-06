@@ -6,6 +6,9 @@ newlines = []
 
 intensities = {}
 
+variation_in = 3
+variation_out = 2
+
 def pattern_note(type, length, first, magnitude):
     if type == 1:
         # parabolic, up then down
@@ -40,11 +43,11 @@ for i in range(100000):
         magnitude = random.randint(10, 60-first_note-2)
     elif pattern_type == 2:
         magnitude = random.randint(9, first_note-2)
-    notes = " ".join(map(str, pattern_note(pattern_type, length, first_note, magnitude)))
-    output = " ".join(map(str, pattern_output(pattern_type, length)))
+    notes = " ".join(map(lambda x: str(min(60, max(1, x+((2*random.randint(0,1)-1)*random.randint(0, variation_in))))), pattern_note(pattern_type, length, first_note, magnitude)))
+    output = " ".join(map(lambda x: str(min(10, max(1, x+((2*random.randint(0,1)-1)*random.randint(0, variation_out))))), pattern_output(pattern_type, length)))
 
     newlines.append(notes + "\t" + output + "\n")
 
-f = open("./language_data/notes_numbers.txt", "w")
+f = open("./language_data/notes_numbers_variation.txt", "w")
 f.writelines(newlines)
 f.close()

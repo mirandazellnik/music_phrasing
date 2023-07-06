@@ -12,7 +12,7 @@ from tensorflow import keras
 layers = keras.layers
 TextVectorization = layers.TextVectorization
 
-data_path = "./language_data/notes_numbers.txt"
+data_path = "./language_data/notes_numbers_variation.txt"
 
 with open(data_path) as f:
     lines = f.read().split("\n")[:-1]
@@ -224,6 +224,7 @@ def decode_sequence(input_sentence):
     for i in range(max_decoded_sentence_length):
         tokenized_target_sentence = vols_vectorization([decoded_sentence])[:, :-1]
         predictions = transformer([tokenized_input_sentence, tokenized_target_sentence])
+        print(predictions)
 
         sampled_token_index = np.argmax(predictions[0, i, :])
         sampled_token = vols_index_lookup[sampled_token_index]
@@ -234,7 +235,7 @@ def decode_sequence(input_sentence):
     return decoded_sentence
 
 
-train = True
+train = False
 
 if train:
 
@@ -252,7 +253,7 @@ if train:
     for epoch in range(epochs):
         print(f"Epoch {epoch+1}/{epochs}")
         transformer.fit(train_ds, epochs=1, validation_data=val_ds)
-        transformer.save_weights("new_s2s_weights/weights")
+        transformer.save_weights("new_s2s_variation_weights/weights")
         test_notes_texts = [pair[0] for pair in test_pairs]
         print("Example sentences:")
         for _ in range(10):
@@ -270,7 +271,7 @@ transformer.load_weights("new_s2s_weights/weights")
 
 
 test_notes_texts = [pair[0] for pair in test_pairs]
-for _ in range(30):
+for _ in range(1):
     input_sentence = random.choice(test_notes_texts)
     translated = decode_sequence(input_sentence)
     print(f"IN: {input_sentence}    OUT: {translated}")
