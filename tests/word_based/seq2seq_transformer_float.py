@@ -12,7 +12,7 @@ from tensorflow import keras
 layers = keras.layers
 TextVectorization = layers.TextVectorization
 
-data_path = "./language_data/notes_numbers_variation.txt"
+data_path = "./language_data/notes_numbers.txt"
 
 with open(data_path) as f:
     lines = f.read().split("\n")[:-1]
@@ -21,6 +21,8 @@ for line in lines:
     notes, vols = line.split("\t")
     vols = "[start] " + vols + " [end]"
     text_pairs.append((notes, vols))
+
+text_pairs = text_pairs[:20000]
 
 random.shuffle(text_pairs)
 num_val_samples = int(0.15 * len(text_pairs))
@@ -64,25 +66,37 @@ notes_vectorization.adapt(train_notes_texts)
 vols_vectorization.adapt(train_vols_texts)
 
 def format_dataset(notes, vols):
+    print("---- ABC1111     " + str(vols))
+
     notes = notes_vectorization(notes)
-    vols = vols_vectorization(vols)
+
     return ({"encoder_inputs": notes, "decoder_inputs": vols[:, :-1],}, vols[:, 1:])
 
 
 def make_dataset(pairs):
     notes_texts, vols_texts = zip(*pairs)
     notes_texts = list(notes_texts)
-    vols_texts = list(vols_texts)
-    print(vols_texts[:10])
+    vols_texts1 = list(vols_texts)
+
+    vols_texts = []
+    for i in vols_texts1:
+        temp = np.zeros(21)
+        
+        for j, vol in enumerate(i.split(" ")):
+            if vol in ["[start]", "[end]"]:
+                continue
+            temp[j] = float(vol)/10-.05
+        
+        vols_texts.append(temp)
+    
     dataset = tf.data.Dataset.from_tensor_slices((notes_texts, vols_texts))
     dataset = dataset.batch(batch_size)
     dataset = dataset.map(format_dataset)
-    print(dataset)
     return dataset.shuffle(2048).prefetch(16).cache()
 
 
 train_ds = make_dataset(train_pairs)
-print(train_ds[:10])
+#print(train_ds[:10])
 val_ds = make_dataset(val_pairs)
 
 for inputs, targets in train_ds.take(1):
@@ -207,12 +221,14 @@ encoder = keras.Model(encoder_inputs, encoder_outputs)
 
 decoder_inputs = keras.Input(shape=(None,), dtype="int64", name="decoder_inputs")
 encoded_seq_inputs = keras.Input(shape=(None, embed_dim), name="decoder_state_inputs")
-x = PositionalEmbedding(sequence_length, vocab_size_vols, embed_dim)(decoder_inputs)
+x = PositionalEmbedding(sequence_length, 1, embed_dim)(decoder_inputs)
 x = TransformerDecoder(embed_dim, latent_dim, num_heads)(x, encoded_seq_inputs)
 x = layers.Dropout(0.5)(x)
-decoder_outputs = layers.Dense(vocab_size_vols, activation="softmax")(x)
-decoder = keras.Model([decoder_inputs, encoded_seq_inputs], decoder_outputs)
+decoder_outputs = layers.Dense(1, activation="sigmoid")(x)
+x2 = layers.Reshape((-1, 1))(decoder_outputs)
+decoder = keras.Model([decoder_inputs, encoded_seq_inputs], x2)
 decoder_outputs = decoder([decoder_inputs, encoder_outputs])
+#decoder_outputs = layers.Dense(20, activation="sigmoid")(decoder_outputs)
 
 
 
@@ -223,22 +239,25 @@ max_decoded_sentence_length = 20
 
 def decode_sequence(input_sentence):
     tokenized_input_sentence = notes_vectorization([input_sentence])
-    decoded_sentence = "[start]"
-    for i in range(max_decoded_sentence_length):
-        tokenized_target_sentence = vols_vectorization([decoded_sentence])[:, :-1]
-        predictions = transformer([tokenized_input_sentence, tokenized_target_sentence])
-        #print(predictions)
-
-        sampled_token_index = np.argmax(predictions[0, i, :])
-        sampled_token = vols_index_lookup[sampled_token_index]
-        decoded_sentence += " " + sampled_token
-
-        if sampled_token == "[end]":
-            break
-    return decoded_sentence
+    #print(tokenized_input_sentence)
+    output_vols = [np.zeros(21)]
+    for i in range(len(input_sentence.split(" "))-1):
+        
+        predictions = transformer([tokenized_input_sentence, tf.constant([output_vols[0][:-1]])])
+        #print(float(predictions[0, i, 0]))
+        output_vols[0][i+1]=(float(predictions[0, i, 0]))
 
 
-train = False
+        #sampled_token_index = np.argmax(predictions[0, i, :])
+        #sampled_token = vols_index_lookup[sampled_token_index]
+        #decoded_sentence += " " + sampled_token
+
+        #if float(predictions[0, i, 0]) == 0:
+        #    break
+    return output_vols
+
+
+train = True
 
 if train:
 
@@ -246,35 +265,37 @@ if train:
         [encoder_inputs, decoder_inputs], decoder_outputs, name="transformer"
     )
 
-    epochs = 5  # Converged pretty well with this # on the auto-generated data
+    epochs = 4  # Converged pretty well with this # on the auto-generated data
 
     transformer.summary()
     transformer.compile(
-        "rmsprop", loss="sparse_categorical_crossentropy", metrics=["accuracy"]
+        keras.optimizers.experimental.AdamW(learning_rate=.001), loss="mean_squared_error", metrics=["accuracy"]
     )
 
     for epoch in range(epochs):
         print(f"Epoch {epoch+1}/{epochs}")
         transformer.fit(train_ds, epochs=1, validation_data=val_ds)
-        transformer.save_weights("new_s2s_variation_weights/weights")
+        transformer.save_weights("new_s2s_variation_float/weights")
         test_notes_texts = [pair[0] for pair in test_pairs]
+        """
         print("Example sentences:")
         for _ in range(10):
             input_sentence = random.choice(test_notes_texts)
             translated = decode_sequence(input_sentence)
             print(f"IN: {input_sentence}    OUT: {translated}")
+        """
 
 
 
 transformer = transformer = keras.Model(
     [encoder_inputs, decoder_inputs], decoder_outputs, name="transformer"
 )
-transformer.load_weights("new_s2s_weights/weights")
+transformer.load_weights("new_s2s_variation_float/weights")
 
 
 
 test_notes_texts = [pair[0] for pair in test_pairs]
-for _ in range(1):
+for _ in range(10):
     input_sentence = random.choice(test_notes_texts)
     translated = decode_sequence(input_sentence)
     print(f"IN: {input_sentence}    OUT: {translated}")

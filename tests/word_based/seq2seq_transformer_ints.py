@@ -12,15 +12,17 @@ from tensorflow import keras
 layers = keras.layers
 TextVectorization = layers.TextVectorization
 
-data_path = "./language_data/notes_numbers_variation.txt"
+data_path = "./language_data/notes_numbers.txt"
 
 with open(data_path) as f:
     lines = f.read().split("\n")[:-1]
 text_pairs = []
 for line in lines:
     notes, vols = line.split("\t")
-    vols = "[start] " + vols + " [end]"
+    vols = "[start] " + vols
     text_pairs.append((notes, vols))
+
+text_pairs = text_pairs[:20000]
 
 random.shuffle(text_pairs)
 num_val_samples = int(0.15 * len(text_pairs))
@@ -66,6 +68,8 @@ vols_vectorization.adapt(train_vols_texts)
 def format_dataset(notes, vols):
     notes = notes_vectorization(notes)
     vols = vols_vectorization(vols)
+    print("---- ABC1111     " + str(vols))
+
     return ({"encoder_inputs": notes, "decoder_inputs": vols[:, :-1],}, vols[:, 1:])
 
 
@@ -224,7 +228,7 @@ def decode_sequence(input_sentence):
     for i in range(max_decoded_sentence_length):
         tokenized_target_sentence = vols_vectorization([decoded_sentence])[:, :-1]
         predictions = transformer([tokenized_input_sentence, tokenized_target_sentence])
-        print(predictions)
+        #print(predictions)
 
         sampled_token_index = np.argmax(predictions[0, i, :])
         sampled_token = vols_index_lookup[sampled_token_index]
@@ -235,7 +239,7 @@ def decode_sequence(input_sentence):
     return decoded_sentence
 
 
-train = False
+train = True
 
 if train:
 
@@ -243,7 +247,7 @@ if train:
         [encoder_inputs, decoder_inputs], decoder_outputs, name="transformer"
     )
 
-    epochs = 5  # Converged pretty well with this # on the auto-generated data
+    epochs = 4  # Converged pretty well with this # on the auto-generated data
 
     transformer.summary()
     transformer.compile(
