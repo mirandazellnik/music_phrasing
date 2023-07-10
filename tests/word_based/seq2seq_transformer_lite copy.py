@@ -10,8 +10,6 @@ import numpy as np
 import tensorflow as tf
 from tensorflow import keras
 import matplotlib.pyplot as plt
-from IPython.display import clear_output
-
 layers = keras.layers
 TextVectorization = layers.TextVectorization
 
@@ -202,55 +200,6 @@ class TransformerDecoder(layers.Layer):
         )
         return tf.tile(mask, mult)
 
-
-class PlotLearning(keras.callbacks.Callback):
-    """
-    Callback to plot the learning curves of the model during training.
-    """
-    def on_train_begin(self, logs={}):
-        self.metrics = {}
-        for metric in logs:
-            self.metrics[metric] = []
-        plt.ion()
-            
-
-    def on_epoch_end(self, epoch, logs={}):
-        # Storing metrics
-        for metric in logs:
-            if metric in self.metrics:
-                self.metrics[metric].append(logs.get(metric))
-            else:
-                self.metrics[metric] = [logs.get(metric)]
-        
-        # Plotting
-        metrics = [x for x in logs if 'val' not in x]
-        
-        if epoch == 0:
-            self.f, self.axs = plt.subplots(1, len(metrics), figsize=(15,5))
-        f = self.f
-        axs = self.axs
-
-        clear_output(wait=True)
-        
-
-        for i, metric in enumerate(metrics):
-            axs[i].cla()
-            axs[i].plot(range(1, epoch + 2), 
-                        self.metrics[metric], 
-                        label=metric)
-            if logs['val_' + metric]:
-                axs[i].plot(range(1, epoch + 2), 
-                            self.metrics['val_' + metric], 
-                            label='val_' + metric)
-                
-            axs[i].legend()
-            axs[i].grid()
-
-        plt.tight_layout()
-
-        f.canvas.draw()
-        f.canvas.flush_events()
-
 embed_dim = 64
 latent_dim = 256
 num_heads = 8
@@ -279,18 +228,50 @@ if train:
 
     epochs = 5  # This should be at least 30 for convergence
 
+    fig, (acc, loss) = plt.subplots(2, sharex=True)
+    acc.set_title(f"Accuracy")
+    loss.set_title(f"Loss")
+    plt.xlim(1, epochs)
+    #plt.xticks()
+    plt.setp(acc, ylim=(0,1))
+    #plt.setp(loss, ylim=(0,10))
+    #acc.ylim(0, 1)
+    #loss.ylim(0,10)
+    plt.xlabel("Epoch")
+    acc_train, = acc.plot([], [], marker=None)
+    acc_val, = acc.plot([], [], marker=None)
+    loss_train, = loss.plot([], [], marker=None)
+    loss_val, = loss.plot([], [], marker=None)
+
+    #plt.ylabel("Concentration (%)")
+
+    # Draw 
+    for i in range(4):
+        plt.draw()
+        plt.pause(.001)
     
     transformer.summary()
     transformer.compile(
         "rmsprop", loss="sparse_categorical_crossentropy", metrics=["accuracy"]
     )
-
-
-
-    callbacks_list = [PlotLearning()]
-    
-    transformer.fit(train_ds, epochs=epochs, validation_data=val_ds, callbacks=callbacks_list)
-
+    for e in range(epochs):
+        hist = transformer.fit(train_ds, epochs=1, validation_data=val_ds)
+        hist = hist.history
+        print(hist)
+        acc_train.set_xdata(range(1, e+2))
+        acc_val.set_xdata(range(1, e+2))
+        loss_train.set_xdata(range(1, e+2))
+        loss_val.set_xdata(range(1, e+2))
+        acc_train.set_ydata(np.append(acc_train.get_ydata(), hist['accuracy']))
+        acc_val.set_ydata(np.append(acc_val.get_ydata(), hist['val_accuracy']))
+        loss_train.set_ydata(np.append(loss_train.get_ydata(), hist['loss']))
+        loss_val.set_ydata(np.append(loss_val.get_ydata(), hist['val_loss']))
+        loss.autoscale()
+        print(loss_val.get_data())
+        plt.draw()
+        plt.pause(.00001)
+        plt.draw()
+        plt.pause(.00001)
     plt.show()
     transformer.save_weights("new_s2s_weights/weights")
 

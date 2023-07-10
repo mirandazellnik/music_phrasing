@@ -7,7 +7,7 @@ newlines = []
 intensities = {}
 
 variation_in = 3
-variation_out = 2
+variation_out = 0
 
 def pattern_note(type, length, first, magnitude):
     if type == 1:
