@@ -13,9 +13,10 @@ from IPython.display import clear_output
 
 from tensorflow import keras
 layers = keras.layers
+K = keras.backend
 TextVectorization = layers.TextVectorization
 
-data_path = "./language_data/notes_numbers_variation.txt"
+data_path = "./language_data/notes_numbers.txt"
 
 with open(data_path) as f:
     lines = f.read().split("\n")[:-1]
@@ -25,7 +26,7 @@ for line in lines:
     vols = "[start] " + vols + " [end]"
     text_pairs.append((notes, vols))
 
-#text_pairs = text_pairs[:2000]
+text_pairs = text_pairs[:20000]
 
 random.shuffle(text_pairs)
 num_val_samples = int(0.15 * len(text_pairs))
@@ -45,7 +46,7 @@ strip_chars = strip_chars.replace("]", "")
 
 vocab_size_notes = 62
 vocab_size_vols = 15
-sequence_length = 20
+sequence_length = 200
 batch_size = 64
 
 
@@ -88,12 +89,27 @@ def make_dataset(pairs):
         for j, vol in enumerate(i.split(" ")):
             if vol in ["[start]", "[end]"]:
                 continue
-            temp[j] = min(.99, max(.01, float(vol)/10-.05+((random.random()-.5))))
+            #temp[j] = min(.99, max(.01, float(vol)/10-.05+((random.random()-.5))))
             temp[j] = float(vol)/10 - .05
         
         vols_texts.append(temp)
     
-    dataset = tf.data.Dataset.from_tensor_slices((notes_texts, vols_texts))
+    combined_notes_texts = []
+    combined_vols_texts = []
+    for i in range(len(pairs)):
+        notes = ""
+        vols = [0]
+        for j in range(random.randint(1,3)):
+            x = random.randint(0, len(pairs)-1)
+            notes += notes_texts[x] + " "
+            vols += [k for k in vols_texts[x] if k > 0]
+        notes = notes[:-1]
+        vols += [0 for k in range(201-len(vols))]
+        combined_notes_texts.append(notes)
+        combined_vols_texts.append(vols)
+            
+
+    dataset = tf.data.Dataset.from_tensor_slices((combined_notes_texts, combined_vols_texts))
     dataset = dataset.batch(batch_size)
     dataset = dataset.map(format_dataset)
     return dataset.shuffle(2048).prefetch(16).cache()
@@ -214,8 +230,8 @@ class TransformerDecoder(layers.Layer):
         )
         return tf.tile(mask, mult)
 
-embed_dim = 64
-latent_dim = 512
+embed_dim = 128
+latent_dim = 8192
 num_heads = 8
 
 encoder_inputs = keras.Input(shape=(None,), dtype="int64", name="encoder_inputs")
@@ -238,18 +254,17 @@ decoder_outputs = decoder([decoder_inputs, encoder_outputs])
 
 vols_vocab = vols_vectorization.get_vocabulary()
 vols_index_lookup = dict(zip(range(len(vols_vocab)), vols_vocab))
-max_decoded_sentence_length = 20
+max_decoded_sentence_length = 200
 
 
 def decode_sequence(input_sentence):
     tokenized_input_sentence = notes_vectorization([input_sentence])
     #print(tokenized_input_sentence)
-    output_vols = [np.zeros(21)]
-    for i in range(len(input_sentence.split(" "))-1):
-        
+    output_vols = [np.zeros(201)]
+    for i in range(max_decoded_sentence_length):
         predictions = transformer([tokenized_input_sentence, tf.constant([output_vols[0][:-1]])])
         #print(float(predictions[0, i, 0]))
-        output_vols[0][i+1]=(float(predictions[0, i, 0]))
+        output_vols[0][i+1]=(round(float(predictions[0, i, 0]), 2))
 
 
         #sampled_token_index = np.argmax(predictions[0, i, :])
@@ -270,6 +285,7 @@ class PlotLearning(keras.callbacks.Callback):
         
         if not hasattr(self, "metrics"): 
             self.metrics = {}
+            self.epoch = 0
             for metric in logs:
                 self.metrics[metric] = []
             plt.ion()
@@ -286,7 +302,7 @@ class PlotLearning(keras.callbacks.Callback):
         # Plotting
         metrics = [x for x in logs if 'val' not in x]
         
-        if epoch == 0:
+        if self.epoch == 0:
             self.f, self.axs = plt.subplots(1, len(metrics), figsize=(15,5))
         f = self.f
         axs = self.axs
@@ -296,16 +312,18 @@ class PlotLearning(keras.callbacks.Callback):
 
         for i, metric in enumerate(metrics):
             axs[i].cla()
-            axs[i].plot(range(1, epoch + 2), 
+            axs[i].plot(range(1, self.epoch + 2), 
                         self.metrics[metric], 
                         label=metric)
             if logs['val_' + metric]:
-                axs[i].plot(range(1, epoch + 2), 
+                axs[i].plot(range(1, self.epoch + 2), 
                             self.metrics['val_' + metric], 
                             label='val_' + metric)
                 
             axs[i].legend()
             axs[i].grid()
+        
+        self.epoch += 1
 
         plt.tight_layout()
         f.canvas.draw()
@@ -322,28 +340,47 @@ if train:
         [encoder_inputs, decoder_inputs], decoder_outputs, name="transformer"
     )
 
-    epochs = 30
+    epochs = 60
 
     transformer.summary()
+    
+    keras.utils.plot_model(transformer, show_shapes=True, show_dtype=True, expand_nested=True, show_layer_activations=True, show_trainable=True)
+
+    def custom_loss(y_true, y_pred):
+        print(y_true)
+        print(y_pred)
+        
+        print(K.mean(K.square(y_pred - y_true), axis=-1))
+
+        x = tf.experimental.numpy.diff(y_pred, axis=-1)
+        y = tf.experimental.numpy.diff(y_true, axis=-1)
+        z = K.mean(K.square(x - y))
+
+        print(z + K.mean(K.square(y_pred - y_true), axis=-1))
+        
+        return z + K.mean(K.square(y_pred - y_true), axis=-1)
+
+    
     transformer.compile(
-        keras.optimizers.experimental.AdamW(learning_rate=.001), loss="mean_squared_error", metrics=["cosine_similarity"]
+        keras.optimizers.experimental.AdamW(learning_rate=.0002), loss="mean_squared_error", metrics=["cosine_similarity"]
     )
 
     plotter = PlotLearning()
 
     for i in range(epochs):
-        transformer.fit(train_ds, epochs=1, validation_data=val_ds, callbacks=[plotter])
+        transformer.fit(train_ds, epochs=1, validation_data=val_ds, callbacks=[plotter], verbose=2)
+        """
         print("TEST ----------------------")
-        for _ in range(5):
-            input_sentence = random.choice(test_notes_texts)
-            translated = decode_sequence(input_sentence)
-            print(f"IN: {input_sentence}    OUT: {translated}")
-        print("TRAIN ---------------------")
-        for _ in range(5):
-            input_sentence = random.choice(train_notes_texts)
-            translated = decode_sequence(input_sentence)
-            print(f"IN: {input_sentence}    OUT: {translated}")
-        
+        for k in range(10):
+            notes = ""
+            for j in range(random.randint(1,10)):
+                x = random.randint(0, len(test_pairs)-1)
+                notes += test_pairs[x][0] + " "
+            notes = notes[:-1]
+            translated = decode_sequence(notes)
+            print(f"IN: {notes}    OUT: {translated}")
+        """
+            
     transformer.save_weights("new_s2s_variation_float/weights")
 
 
@@ -357,11 +394,18 @@ transformer.load_weights("new_s2s_variation_float/weights")
 
 
 test_notes_texts = [pair[0] for pair in test_pairs]
-for _ in range(10):
-    input_sentence = random.choice(test_notes_texts)
-    translated = decode_sequence(input_sentence)
-    print(f"IN: {input_sentence}    OUT: {translated}")
+for k in range(10):
+    notes = ""
+    for j in range(random.randint(1,3)):
+        x = random.randint(0, len(test_pairs)-1)
+        notes += test_pairs[x][0] + " "
+    notes = notes[:-1]
+    translated = decode_sequence(notes)
+    translated = translated[0][:len(notes.split(" "))+1]
+    print(f"IN:  {notes}")
+    print(f"OUT: {' '.join(str(int(x*100)) for i, x in enumerate(translated) if i > 0)}")
 
 print("DONE! Save graph before quitting!")
+plt.savefig('new_info.png')
 plt.ioff()
 plt.show()
