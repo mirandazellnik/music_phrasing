@@ -2,21 +2,17 @@
 https://keras.io/examples/nlp/neural_machine_translation_with_transformer/
 """
 
-import pathlib
 import random
 import string
 import re
 import numpy as np
 import tensorflow as tf
-import matplotlib.pyplot as plt
-from IPython.display import clear_output
-
 from tensorflow import keras
-layers = keras.layers
-K = keras.backend
-TextVectorization = layers.TextVectorization
+layers, K = keras.layers, keras.backend
 
-data_path = "./language_data/notes_numbers.txt"
+from util.plotter import PlotLearning
+
+data_path = "./data/notes_numbers.txt"
 
 with open(data_path) as f:
     lines = f.read().split("\n")[:-1]
@@ -26,7 +22,7 @@ for line in lines:
     vols = "[start] " + vols + " [end]"
     text_pairs.append((notes, vols))
 
-text_pairs = text_pairs[:20000]
+text_pairs = text_pairs[:20]
 
 random.shuffle(text_pairs)
 num_val_samples = int(0.15 * len(text_pairs))
@@ -45,7 +41,6 @@ strip_chars = strip_chars.replace("[", "")
 strip_chars = strip_chars.replace("]", "")
 
 vocab_size_notes = 62
-vocab_size_vols = 15
 sequence_length = 200
 batch_size = 64
 
@@ -55,25 +50,15 @@ def custom_standardization(input_string):
     return tf.strings.regex_replace(lowercase, "[%s]" % re.escape(strip_chars), "")
 
 
-notes_vectorization = TextVectorization(
+notes_vectorization = layers.TextVectorization(
     max_tokens=vocab_size_notes, output_mode="int", output_sequence_length=sequence_length,
 )
-vols_vectorization = TextVectorization(
-    max_tokens=vocab_size_vols,
-    output_mode="int",
-    output_sequence_length=sequence_length + 1,
-    standardize=custom_standardization,
-)
+
 train_notes_texts = [pair[0] for pair in train_pairs]
-train_vols_texts = [pair[1] for pair in train_pairs]
 notes_vectorization.adapt(train_notes_texts)
-vols_vectorization.adapt(train_vols_texts)
 
 def format_dataset(notes, vols):
-    print("---- ABC1111     " + str(vols))
-
     notes = notes_vectorization(notes)
-
     return ({"encoder_inputs": notes, "decoder_inputs": vols[:, :-1],}, vols[:, 1:])
 
 
@@ -116,13 +101,8 @@ def make_dataset(pairs):
 
 
 train_ds = make_dataset(train_pairs)
-#print(train_ds[:10])
 val_ds = make_dataset(val_pairs)
 
-for inputs, targets in train_ds.take(1):
-    print(f'inputs["encoder_inputs"].shape: {inputs["encoder_inputs"].shape}')
-    print(f'inputs["decoder_inputs"].shape: {inputs["decoder_inputs"].shape}')
-    print(f"targets.shape: {targets.shape}")
 
 class TransformerEncoder(layers.Layer):
     def __init__(self, embed_dim, dense_dim, num_heads, **kwargs):
@@ -252,8 +232,6 @@ decoder_outputs = decoder([decoder_inputs, encoder_outputs])
 
 
 
-vols_vocab = vols_vectorization.get_vocabulary()
-vols_index_lookup = dict(zip(range(len(vols_vocab)), vols_vocab))
 max_decoded_sentence_length = 200
 
 
@@ -276,60 +254,6 @@ def decode_sequence(input_sentence):
     return output_vols
 
 
-
-class PlotLearning(keras.callbacks.Callback):
-    """
-    Callback to plot the learning curves of the model during training.
-    """
-    def on_train_begin(self, logs={}):
-        
-        if not hasattr(self, "metrics"): 
-            self.metrics = {}
-            self.epoch = 0
-            for metric in logs:
-                self.metrics[metric] = []
-            plt.ion()
-            
-
-    def on_epoch_end(self, epoch, logs={}):
-        # Storing metrics
-        for metric in logs:
-            if metric in self.metrics:
-                self.metrics[metric].append(logs.get(metric))
-            else:
-                self.metrics[metric] = [logs.get(metric)]
-        
-        # Plotting
-        metrics = [x for x in logs if 'val' not in x]
-        
-        if self.epoch == 0:
-            self.f, self.axs = plt.subplots(1, len(metrics), figsize=(15,5))
-        f = self.f
-        axs = self.axs
-
-        clear_output(wait=True)
-        
-
-        for i, metric in enumerate(metrics):
-            axs[i].cla()
-            axs[i].plot(range(1, self.epoch + 2), 
-                        self.metrics[metric], 
-                        label=metric)
-            if logs['val_' + metric]:
-                axs[i].plot(range(1, self.epoch + 2), 
-                            self.metrics['val_' + metric], 
-                            label='val_' + metric)
-                
-            axs[i].legend()
-            axs[i].grid()
-        
-        self.epoch += 1
-
-        plt.tight_layout()
-        f.canvas.draw()
-        f.canvas.flush_events()
-
-
 train = True
 
 if train:
@@ -340,11 +264,11 @@ if train:
         [encoder_inputs, decoder_inputs], decoder_outputs, name="transformer"
     )
 
-    epochs = 60
+    epochs = 2
 
     transformer.summary()
     
-    keras.utils.plot_model(transformer, show_shapes=True, show_dtype=True, expand_nested=True, show_layer_activations=True, show_trainable=True)
+    #keras.utils.plot_model(transformer, show_shapes=True, show_dtype=True, expand_nested=True, show_layer_activations=True, show_trainable=True)
 
     def custom_loss(y_true, y_pred):
         print(y_true)
@@ -367,21 +291,9 @@ if train:
 
     plotter = PlotLearning()
 
-    for i in range(epochs):
-        transformer.fit(train_ds, epochs=1, validation_data=val_ds, callbacks=[plotter], verbose=2)
-        """
-        print("TEST ----------------------")
-        for k in range(10):
-            notes = ""
-            for j in range(random.randint(1,10)):
-                x = random.randint(0, len(test_pairs)-1)
-                notes += test_pairs[x][0] + " "
-            notes = notes[:-1]
-            translated = decode_sequence(notes)
-            print(f"IN: {notes}    OUT: {translated}")
-        """
+    transformer.fit(train_ds, epochs=epochs, validation_data=val_ds, callbacks=[plotter], verbose=2)
             
-    transformer.save_weights("new_s2s_variation_float/weights")
+    transformer.save_weights("s2s/weights")
 
 
 
@@ -389,12 +301,12 @@ if train:
 transformer = transformer = keras.Model(
     [encoder_inputs, decoder_inputs], decoder_outputs, name="transformer"
 )
-transformer.load_weights("new_s2s_variation_float/weights")
+transformer.load_weights("s2s/weights")
 
 
 
 test_notes_texts = [pair[0] for pair in test_pairs]
-for k in range(10):
+for k in range(0):
     notes = ""
     for j in range(random.randint(1,3)):
         x = random.randint(0, len(test_pairs)-1)
@@ -405,7 +317,4 @@ for k in range(10):
     print(f"IN:  {notes}")
     print(f"OUT: {' '.join(str(int(x*100)) for i, x in enumerate(translated) if i > 0)}")
 
-print("DONE! Save graph before quitting!")
-plt.savefig('new_info.png')
-plt.ioff()
-plt.show()
+plotter.finish("filename")
