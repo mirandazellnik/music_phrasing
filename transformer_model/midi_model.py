@@ -18,7 +18,7 @@ from util.plotter import PlotLearning
 from util.layers import TransformerEncoder, TransformerDecoder, PositionalEmbedding
 from util.format_midi_dataset import format_midi_dataset
 
-data_path = "/stash/tlab/theom_intern/midi_data/little_pieces_4_(c)oguri.mid"
+data_paths = ["/stash/tlab/theom_intern/midi/de"]
 save_name = sys.argv[1]
 
 
@@ -26,14 +26,18 @@ vocab_size_notes = 62
 sequence_length = 200
 batch_size = 128
 num_samples = 40000
-sequence_offset = 10
+sequence_offset = 100
 
-train_ds, val_ds, test_pairs, notes_vectorization = format_midi_dataset([data_path], sequence_length, sequence_offset, batch_size)
+train_ds, val_ds, test_pairs, notes_vectorization = format_midi_dataset(data_paths, sequence_length, sequence_offset, batch_size)
 
 #embed_dim = 128
 #latent_dim = 8192
-num_heads = 8
+num_heads = 24
 
+
+def custom_loss(y_true, y_pred):
+    
+    return K.mean(K.square(y_pred - y_true), axis=-1)-(K.mean(K.square(y_pred - .52/127*100), axis=-1)*.1)
 
 
 def create_model(embed_dim, latent_dim, learning_rate):
@@ -67,9 +71,9 @@ def create_model(embed_dim, latent_dim, learning_rate):
     return transformer
 
 def optimize_model(hp):
-    embed_dim = hp.Int("embed_dim", min_value=192, max_value=193, step=1)
-    latent_dim = hp.Int("latent_dim", min_value=2048, max_value=2049, step=1)
-    lr = hp.Float("lr", min_value = .000661, max_value = .000662, sampling="log")
+    embed_dim = hp.Int("embed_dim", min_value=64, max_value=128, step=32)
+    latent_dim = hp.Int("latent_dim", min_value=2048, max_value=12288, step=2048)
+    lr = hp.Float("lr", min_value = .0001, max_value = .005, sampling="log")
 
     transformer = create_model(embed_dim, latent_dim, lr)
 
@@ -85,35 +89,45 @@ def decode_sequence(transformer, input_sentence):
     return output_vols
 
 
-train = True
-epochs = 20
+train = False
+epochs = 400
 
 
 if train:
     test_notes_texts = [pair[0] for pair in test_pairs]
 
-    """
-    tuner = keras_tuner.Hyperband(
+    
+    """tuner = keras_tuner.RandomSearch(
         hypermodel=optimize_model,
         objective="val_loss",
-        max_epochs=300,
-        executions_per_trial=3,
+        max_trials=10,
+        executions_per_trial=1,
         overwrite=True,
         directory=f"/stash/tlab/theom_intern/logs/{save_name}/tuner",
         project_name="tuner",
-    )
+    )"""
 
-    tuner.search_space_summary()
+    #tuner.search_space_summary()
 
-    """
-
-    early_stop = tf.keras.callbacks.EarlyStopping(monitor="val_loss", patience=30)
+    
+    #early_stop = tf.keras.callbacks.EarlyStopping(monitor="val_loss", patience=20)
 
     tensorboard = keras.callbacks.TensorBoard(f"/stash/tlab/theom_intern/logs/{save_name}/tensorboard", profile_batch="220,260")
 
-    model = create_model(64, 10240, .00024587)
+    checkpoint = keras.callbacks.ModelCheckpoint(f"/stash/tlab/theom_intern/logs/{save_name}/checkpoints", monitor='val_loss', verbose=1, save_best_only=True, save_weights_only=True, mode='auto', period=1)
 
-    model.fit(train_ds, validation_data=val_ds, epochs=20, verbose=2, callbacks=[tensorboard, early_stop])
+    model = create_model(64, 10240, .00025)
+
+    try:
+        model.load_weights(f"/stash/tlab/theom_intern/logs/{save_name}/checkpoints")
+        print("CONTINUING PROGRESS.")
+    except:
+        model = create_model(64, 10240, .00025)
+        print("NO SAVE FOUND")
+
+    model.fit(train_ds, epochs=epochs, validation_data=val_ds, verbose=2, callbacks = [checkpoint, tensorboard])
+
+    #tuner.search(train_ds, epochs=300, validation_data=val_ds, verbose=2, callbacks=[tensorboard, early_stop])
 
     """best_hps = tuner.get_best_hyperparameters(5)
     pickle_out = open(f"/stash/tlab/theom_intern/logs/{save_name}/best_hps", "wb")
@@ -123,21 +137,14 @@ if train:
     best_models = tuner.get_best_models(num_models=5)
     pickle_out = open(f"/stash/tlab/theom_intern/logs/{save_name}/best_models", "wb")
     pickle.dump(best_models, pickle_out)
-    pickle_out.close()"""
-
+    pickle_out.close()
+    """
+    
     #transformer.summary()
     
     #keras.utils.plot_model(transformer, show_shapes=True, show_dtype=True, expand_nested=True, show_layer_activations=True, show_trainable=True)
 
-    def custom_loss(y_true, y_pred):
 
-        x = tf.experimental.numpy.diff(y_pred, axis=-1)
-        y = tf.experimental.numpy.diff(y_true, axis=-1)
-        z = K.mean(K.square(x - y))
-
-        #print(z + K.mean(K.square(y_pred - y_true), axis=-1))
-        
-        return z + K.mean(K.square(y_pred - y_true), axis=-1)
 
 
     plotter = PlotLearning()
@@ -148,50 +155,23 @@ if train:
 
 #plotter.finish("filename2")
 
-model = create_model(64, 10240, .00024587)
+model = create_model(64, 10240, .00025)
 
 #transformer = create_model()
-model.load_weights(f"/stash/tlab/theom_intern/logs/{save_name}/weights")
+model.load_weights(f"/stash/tlab/theom_intern/logs/{save_name}/checkpoints")
 
 test_notes_texts = [pair[0] for pair in test_pairs]
 
-notes = ""
-for j in range(random.randint(1,10)):
-    x = random.randint(0, len(test_pairs)-1)
-    notes += test_pairs[x][0] + " "
-notes = notes[:-1]
 
-for k in range(10):
-    notes = " ".join([str(int(note)+1) for note in notes.split(" ")])
+for k in range(20):
+    x = random.randint(0, len(test_pairs)-1)
+    notes = test_pairs[x][0]
+    expected = test_pairs[x][1]
+
     translated = decode_sequence(model, notes)
     translated = translated[0][:len(notes.split(" "))+1]
-    print(f"IN:  {notes}")
-    print(f"OUT: {' '.join(str(int(x*100)) for i, x in enumerate(translated) if i > 0)}")
-
-notes = ""
-for j in range(random.randint(1,10)):
-    x = random.randint(0, len(test_pairs)-1)
-    notes += test_pairs[x][0] + " "
-notes = notes[:-1]
-
-for k in range(10):
-    notes = " ".join([str(int(note)+1) for note in notes.split(" ")])
-    translated = decode_sequence(model, notes)
-    translated = translated[0][:len(notes.split(" "))+1]
-    print(f"IN:  {notes}")
-    print(f"OUT: {' '.join(str(int(x*100)) for i, x in enumerate(translated) if i > 0)}")
-
-notes = ""
-for j in range(random.randint(1,10)):
-    x = random.randint(0, len(test_pairs)-1)
-    notes += test_pairs[x][0] + " "
-notes = notes[:-1]
-
-for k in range(10):
-    notes = " ".join([str(int(note)+1) for note in notes.split(" ")])
-    translated = decode_sequence(model, notes)
-    translated = translated[0][:len(notes.split(" "))+1]
-    print(f"IN:  {notes}")
-    print(f"OUT: {' '.join(str(int(x*100)) for i, x in enumerate(translated) if i > 0)}")
+    print(f"IN: {notes}")
+    print(f"EXP: {' '.join(str(x) for x in expected)}")
+    print(f"OUT: {' '.join(str(int(x*128)) for i, x in enumerate(translated) if i > 0)}")
 
 #plotter.finish("filename2")

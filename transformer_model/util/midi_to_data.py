@@ -1,3 +1,4 @@
+import numpy as np
 from mido import MidiFile
 
 x = "/stash/tlab/theom_intern/midi_data/little_pieces_4_(c)oguri.mid"
@@ -7,8 +8,6 @@ def data_from_midi(path):
     notes = []
     vols = []
     for i, track in enumerate(mid.tracks):
-        if track.name != "PIANO":
-            continue
         for msg in track:
             if msg.type != "note_on":
                 continue
@@ -17,4 +16,6 @@ def data_from_midi(path):
             #print(msg.note)
             notes.append(msg.note)
             vols.append(msg.velocity)
+    
+    
     return notes, vols
