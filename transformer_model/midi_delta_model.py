@@ -2,6 +2,7 @@
 https://keras.io/examples/nlp/neural_machine_translation_with_transformer/
 """
 
+import os
 import random
 import string
 import re
@@ -16,9 +17,9 @@ layers, K = keras.layers, keras.backend
 
 from util.plotter import PlotLearning
 from util.layers import TransformerEncoder, TransformerDecoder, PositionalEmbedding
-from util.format_midi_dataset import format_midi_dataset
+from util.format_midi_delta_dataset import format_midi_dataset
 
-data_paths = ["/stash/tlab/theom_intern/midi/de/mozart", "/stash/tlab/theom_intern/midi/de/haydn"]
+data_paths = ["/stash/tlab/theom_intern/midi/de/mozart", "/stash/tlab/theom_intern/midi/de/haydn", "/stash/tlab/theom_intern/midi/de/beeth", "/stash/tlab/theom_intern/midi/de/clementi"]
 save_name = sys.argv[1]
 
 
@@ -26,15 +27,15 @@ save_name = sys.argv[1]
 sequence_length = 100
 batch_size = 64
 num_samples = 40000
-sequence_offset = 40
+sequence_offset = 100
 
-train_ds, val_ds, test_pairs, notes_vectorization = format_midi_dataset(data_paths, sequence_length, sequence_offset, batch_size)
+train_ds, val_ds, test_pairs, notes_vectorization, train_pairs = format_midi_dataset(data_paths, sequence_length, sequence_offset, batch_size)
 
 vocab_size_notes = notes_vectorization.vocabulary_size()
 
 #embed_dim = 128
 #latent_dim = 8192
-num_heads = 24
+num_heads = 8
 
 
 def custom_loss(y_true, y_pred):
@@ -46,6 +47,7 @@ def create_model(embed_dim, latent_dim, learning_rate):
     encoder_inputs = keras.Input(shape=(None,), dtype="int64", name="encoder_inputs")
     x = PositionalEmbedding(sequence_length*2, vocab_size_notes, embed_dim)(encoder_inputs)
     encoder_outputs = TransformerEncoder(embed_dim, latent_dim, num_heads)(x)
+    encoder_outputs = layers.Dropout(.5)(encoder_outputs)
     encoder = keras.Model(encoder_inputs, encoder_outputs)
 
     decoder_inputs = keras.Input(shape=(None,), dtype="int64", name="decoder_inputs")
@@ -73,8 +75,8 @@ def create_model(embed_dim, latent_dim, learning_rate):
     return transformer
 
 def optimize_model(hp):
-    embed_dim = hp.Int("embed_dim", min_value=64, max_value=129, step=64)
-    latent_dim = hp.Int("latent_dim", min_value=2048, max_value=12288, step=2048)
+    embed_dim = hp.Int("embed_dim", min_value=32, max_value=128, step=32)
+    latent_dim = hp.Int("latent_dim", min_value=1024, max_value=12288, step=1024)
     lr = hp.Float("lr", min_value = .00005, max_value = .005, sampling="log")
 
 
@@ -100,47 +102,56 @@ if train:
     test_notes_texts = [pair[0] for pair in test_pairs]
 
     
-    tuner = keras_tuner.Hyperband(
-        hypermodel=optimize_model,
-        objective="val_loss",
-        max_epochs=50,
-        executions_per_trial=1,
-        overwrite=True,
-        directory=f"/stash/tlab/theom_intern/logs/{save_name}/tuner",
-        project_name="tuner",
-    )
+    
 
     #tuner.search_space_summary()
 
     
-    #early_stop = tf.keras.callbacks.EarlyStopping(monitor="val_loss", patience=30)
+    #early_stop = tf.keras.callbacks.EarlyStopping(monitor="val_loss", patience=4)
 
     tensorboard = keras.callbacks.TensorBoard(f"/stash/tlab/theom_intern/logs/{save_name}/tensorboard", profile_batch="220,260")
 
-    #checkpoint = keras.callbacks.ModelCheckpoint(f"/stash/tlab/theom_intern/logs/{save_name}/checkpoints", monitor='val_loss', verbose=1, save_best_only=True, save_weights_only=True, mode='auto', period=1)
+    checkpoint = keras.callbacks.ModelCheckpoint(f"/stash/tlab/theom_intern/logs/{save_name}/checkpoints", monitor='val_loss', verbose=1, save_best_only=True, save_weights_only=True, mode='auto', period=1)
 
-    #model = create_model(64, 10240, .00025)
+    strategy = tf.distribute.MirroredStrategy()
 
-    #try:
-    #    model.load_weights(f"/stash/tlab/theom_intern/logs/{save_name}/checkpoints")
-    #    print("CONTINUING PROGRESS.")
-    #except:
-    #    model = create_model(64, 10240, .00025)
-    #    print("NO SAVE FOUND")
+    with strategy.scope():
+        model = create_model(64, 12288, .0007)
 
-    #model.fit(train_ds, epochs=epochs, validation_data=val_ds, verbose=2, callbacks = [checkpoint, tensorboard, early_stop])
+        try:
+            model.load_weights(f"/stash/tlab/theom_intern/logs/{save_name}/checkpoints")
+            print("CONTINUING PROGRESS.")
+        except:
+            model = create_model(64, 12288, .0007)
+            print("NO SAVE FOUND")
+    
+    model.fit(train_ds, epochs=epochs, validation_data=val_ds, verbose=2, callbacks = [checkpoint, tensorboard])
+    
 
-    tuner.search(train_ds, validation_data=val_ds, verbose=2, callbacks=[tensorboard])
+    #with strategy.scope():
+    #    tuner = keras_tuner.Hyperband(
+    #        hypermodel=optimize_model,
+    #        objective="val_loss",
+    #        max_epochs=125,
+    #        executions_per_trial=1,
+    #        overwrite=False,
+    #        directory=f"/stash/tlab/theom_intern/logs/{save_name}/tuner",
+    #        project_name="tuner",
+    #    )
 
-    best_hps = tuner.get_best_hyperparameters(5)
-    pickle_out = open(f"/stash/tlab/theom_intern/logs/{save_name}/best_hps", "wb")
-    pickle.dump(best_hps, pickle_out)
-    pickle_out.close()
+    #    tuner.reload()
 
-    best_models = tuner.get_best_models(num_models=5)
-    pickle_out = open(f"/stash/tlab/theom_intern/logs/{save_name}/best_models", "wb")
-    pickle.dump(best_models, pickle_out)
-    pickle_out.close()
+        #tuner.search(train_ds, validation_data=val_ds, verbose=2, callbacks=[tensorboard])
+
+    #best_hps = tuner.get_best_hyperparameters(5)
+    #pickle_out = open(f"/stash/tlab/theom_intern/logs/{save_name}/best_hps", "wb")
+    #pickle.dump(best_hps, pickle_out)
+    #pickle_out.close()
+
+    #best_models = tuner.get_best_models(num_models=1)
+    #pickle_out = open(f"/stash/tlab/theom_intern/logs/{save_name}/best_models", "wb")
+    #pickle.dump(best_models, pickle_out)
+    #pickle_out.close()
     
     
     #transformer.summary()
@@ -154,17 +165,45 @@ if train:
 
     #transformer.fit(train_ds, epochs=epochs, validation_data=val_ds, callbacks=[plotter], verbose=2)
             
-    model.save_weights(f"/stash/tlab/theom_intern/logs/{save_name}/weights")
+    #model.save_weights(f"/stash/tlab/theom_intern/logs/{save_name}/weights")
 
 #plotter.finish("filename2")
 
-model = create_model(64, 10240, .00025)
+#model = best_models[0]
 
 #transformer = create_model()
+
+
+
+print("TRAIN _______________________________________")
+for k in range(20):
+    x = random.randint(0, len(train_pairs)-1)
+    notes = train_pairs[x][0]
+    expected = train_pairs[x][1]
+
+    translated = decode_sequence(model, notes)
+    translated = translated[0][:len(notes.split(" "))+1]
+
+    final = [0]
+    for i in range(int(len(translated)/2)):
+        final.append(final[i]-(final[i]-round(translated[i+1]))*translated[i])
+
+
+    print(f"IN: {notes}")
+    print(f"EXP: {' '.join(str(x) for x in expected)}")
+    print(f"OUT(o): {' '.join(str(int(x*100)) for i, x in enumerate(translated))}")
+    print(f"OUT: {' '.join(str(int(x*128)) for i, x in enumerate(final) if i > 0)}")
+
+
+print("TEST _______________________________________")
+
+
+model = create_model(64, 12288, .0007)
+#saves = [int(name[4:]) for name in os.listdir(f"/stash/tlab/theom_intern/logs/{save_name}/checkpoints/")]
+
 model.load_weights(f"/stash/tlab/theom_intern/logs/{save_name}/checkpoints")
 
 test_notes_texts = [pair[0] for pair in test_pairs]
-
 
 for k in range(20):
     x = random.randint(0, len(test_pairs)-1)
@@ -173,8 +212,15 @@ for k in range(20):
 
     translated = decode_sequence(model, notes)
     translated = translated[0][:len(notes.split(" "))+1]
+
+    final = [0]
+    for i in range(int(len(translated)/2)):
+        final.append(final[i]-(final[i]-round(translated[i+1]))*translated[i])
+
+
     print(f"IN: {notes}")
     print(f"EXP: {' '.join(str(x) for x in expected)}")
-    print(f"OUT: {' '.join(str(int(x*128)) for i, x in enumerate(translated) if i > 0)}")
+    print(f"OUT(o): {' '.join(str(int(x*100)) for i, x in enumerate(translated))}")
+    print(f"OUT: {' '.join(str(int(x*128)) for i, x in enumerate(final) if i > 0)}")
 
 #plotter.finish("filename2")

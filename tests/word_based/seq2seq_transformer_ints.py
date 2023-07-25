@@ -166,6 +166,8 @@ class TransformerDecoder(layers.Layer):
         causal_mask = self.get_causal_attention_mask(inputs)
         if mask is not None:
             padding_mask = tf.cast(mask[:, tf.newaxis, :], dtype="int32")
+            print("SHAPES:", mask.shape, padding_mask.shape, causal_mask.shape)
+
             padding_mask = tf.minimum(padding_mask, causal_mask)
 
         attention_output_1 = self.attention_1(

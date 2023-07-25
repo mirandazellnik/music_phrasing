@@ -15,7 +15,10 @@ def vectorize(vectorization):
         Return the vectorization function that turns (notes, vols) into (inputs_vectorized, outputs)
     """
     def map_vectors(notes, vols):
+        print("AAAAAAAAAAAa", notes.shape)
         notes = vectorization(notes)
+        print("AAAAA", vols.shape, type(vols), notes.shape)
+
         return ({"encoder_inputs": notes, "decoder_inputs": vols[:, :-1],}, vols[:, 1:])
     return map_vectors
 
@@ -28,24 +31,29 @@ def pairs_to_ds(pairs, sequence_length, batch_size, notes_vectorization):
     vols_texts_int = list(vols_texts)
 
     vols_texts = []
-    for i in vols_texts_int:
-        temp = np.zeros(sequence_length*2+1)
-        
+    for ind, i in enumerate(vols_texts_int):
+        temp = [0]
+        past_vols = [0]
+
         for j, vol in enumerate(i):
-            temp[j] = float(vol)/128 + (1/256)
+            c = float(vol)/128 + (1/256)
+            past_vols.append(c)
+            temp.extend([(past_vols[j] - c) / (past_vols[j] - (c > past_vols[j])), .99 if c > past_vols[j] else (.01 if c < past_vols[j] else .5)])
 
         vols_texts.append(temp)
 
 
     fullsize_vols_texts = []
     for i in range(len(notes_texts)):
-        vols = [0] + [vol for vol in vols_texts[i] if vol > 0]
+        vols = [vol for vol in vols_texts[i]]
 
         vols += [0 for k in range(sequence_length*2 + 1 - len(vols))]
 
         fullsize_vols_texts.append(vols)
     
-            
+    print(vols_texts_int[0])
+    print(notes_texts[0])
+    print(fullsize_vols_texts[0])
 
     dataset = tf.data.Dataset.from_tensor_slices((notes_texts, fullsize_vols_texts))
     dataset = dataset.batch(batch_size)
@@ -152,4 +160,4 @@ def format_midi_dataset(data_paths, sequence_length, sequence_offset, batch_size
     train_ds = pairs_to_ds(train_pairs, sequence_length, batch_size, notes_vectorization)
     val_ds = pairs_to_ds(val_pairs, sequence_length, batch_size, notes_vectorization)
 
-    return train_ds, val_ds, test_pairs, notes_vectorization
+    return train_ds, val_ds, test_pairs, notes_vectorization, train_pairs
