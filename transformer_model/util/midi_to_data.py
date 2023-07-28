@@ -1,7 +1,7 @@
 import os
 import numpy as np
 import music21
-from musicautobot.numpy_encode import NOTE_SIZE, SAMPLE_FREQ, MAX_NOTE_DUR, VALTCONT, VALTSEP, PIANO_RANGE
+from musicautobot.numpy_encode import NOTE_SIZE, SAMPLE_FREQ, MAX_NOTE_DUR, VALTCONT, VALTSEP, PIANO_RANGE, chordarr2stream
 from musicautobot.utils import midifile
 #x = "/stash/tlab/theom_intern/midi_data/little_pieces_4_(c)oguri.mid"
 
@@ -88,7 +88,7 @@ def timestep2npenc(timestep, vol_timestep, note_range=PIANO_RANGE, enc_type=None
 def parse_midi(path):
     mf = midifile.file2mf(path)
     stream = music21.midi.translate.midiFileToStream(mf, quarterLengthDivisors=(8,))
-    chordarr, volarr = stream2chordarr(stream, sample_freq = 4)
+    chordarr, volarr = stream2chordarr(stream, sample_freq = 8)
     npenc = chordarr2npenc(chordarr, volarr)
 
     """for (note, length) in npenc:

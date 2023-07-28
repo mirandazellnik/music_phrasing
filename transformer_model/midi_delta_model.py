@@ -19,7 +19,7 @@ from util.plotter import PlotLearning
 from util.layers import TransformerEncoder, TransformerDecoder, PositionalEmbedding
 from util.format_midi_delta_dataset import format_midi_dataset
 
-data_paths = ["/stash/tlab/theom_intern/midi/de/mozart", "/stash/tlab/theom_intern/midi/de/haydn", "/stash/tlab/theom_intern/midi/de/beeth", "/stash/tlab/theom_intern/midi/de/clementi"]
+data_paths = ["/stash/tlab/theom_intern/midi_data/asap-dataset-master/Chopin/Scherzos/20"]
 save_name = sys.argv[1]
 
 

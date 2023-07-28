@@ -247,7 +247,6 @@ class PlotLearning(keras.callbacks.Callback):
             axs[i].grid()
 
         plt.tight_layout()
-
         f.canvas.draw()
         f.canvas.flush_events()
 
