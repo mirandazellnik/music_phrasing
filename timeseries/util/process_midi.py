@@ -40,6 +40,8 @@ def parse_midi(path=None, id=None):
         shifted_notes = {}
         score_notes = {}
 
+        all_timed_score_vels = []
+
         offset = 0
 
         for msg in perf_mf:
@@ -67,9 +69,9 @@ def parse_midi(path=None, id=None):
 
                 
                 if msg.note in shifted_notes:
-                    shifted_notes[msg.note].append((new_offset, offset, msg.velocity))
+                    shifted_notes[msg.note].append([new_offset, False, msg.velocity])
                 else:
-                    shifted_notes[msg.note] = [(new_offset, offset, msg.velocity)]
+                    shifted_notes[msg.note] = [[new_offset, False, msg.velocity]]
             offset += msg.time
         
         offset = 0
@@ -77,42 +79,41 @@ def parse_midi(path=None, id=None):
         for msg in score_mf:
             if msg.type == "note_on" and msg.velocity > 0:
                 if msg.note in score_notes:
-                    score_notes[msg.note].append([offset, False, 0])
+                    score_notes[msg.note].append([offset, False, 0, len(all_timed_score_vels)])
                 else:
-                    score_notes[msg.note] = [[offset, False, 0]]
+                    score_notes[msg.note] = [[offset, False, 0, len(all_timed_score_vels)]]
+                all_timed_score_vels.append(0)
             offset += msg.time
         
         give_up = 0
 
-        for pitch in shifted_notes:
-            if pitch not in score_notes:
+        for pitch in score_notes:
+            if pitch not in shifted_notes:
                 #print(f"MISSING PITCH {pitch}: never played")
                 continue
-            score_offsets = np.asarray(score_notes[pitch])[:,0]
+            shifted_offsets = np.asarray(shifted_notes[pitch])[:,0]
 
-            for offset, old_offset, vel in shifted_notes[pitch]:
-                idx_list = (np.abs(score_offsets - offset)).argsort()
+            for i in range(len(score_notes[pitch])):
+                offset = score_notes[pitch][i][0]
+                idx_list = (np.abs(shifted_offsets - offset)).argsort()
                 for idx in idx_list:
-                    if abs(score_notes[pitch][idx][0] - offset) > 1:
-                        give_up += 1
+                    if abs(shifted_notes[pitch][idx][0] - offset) > .5:
+                        #print(offset, shifted_notes[pitch][idx][0])
                         break
-                    if score_notes[pitch][idx][1]:
-                        if vel != score_notes[pitch][idx][2]:
-                            continue
-                        else:
-                            break
+                    if False:
+                        pass
                     else: 
-                        score_notes[pitch][idx][1] = True
-                        score_notes[pitch][idx][2] = vel
+                        shifted_notes[pitch][idx][1] = True
+                        score_notes[pitch][i][1] = True
+                        score_notes[pitch][i][2] = shifted_notes[pitch][idx][2]
+                        all_timed_score_vels[score_notes[pitch][i][3]] = shifted_notes[pitch][idx][2]
                         break
-        
-        missing = 0
+
         for i in score_notes:
-            for j in score_notes[i]:
+            for ind, j in enumerate(score_notes[i]):
                 if not j[1]:
-                    missing += 1
-        
-        print(give_up, missing)
+                    j[2] = np.mean(all_timed_score_vels[max(0, score_notes[i][ind][3]-3) : min(len(all_timed_score_vels), score_notes[i][ind][3]+3)])
+                    j[1] = True
 
         return shifted_notes, score_notes
 
