@@ -5,7 +5,7 @@ import json
 
 import numpy as np
 import pandas
-import music21
+import mido
 
 ASAP_PATH = "/stash/tlab/theom_intern/midi_data/asap-dataset-master"
 METADATA = pandas.read_csv(os.path.join(ASAP_PATH, "metadata.csv"))
@@ -31,86 +31,56 @@ def parse_midi(path=None, id=None):
             score_ann = [[x[0], x[2]] for x in f.read().splitlines()]
         
         
-        perf_stream = music21.converter.parse(perf_path, quantizePost=False).parts[0].flat
-        score_stream = music21.converter.parse(score_path, quantizePost=False).flat
+        perf_mf = mido.MidiFile(perf_path)
+        score_mf = mido.MidiFile(score_path)
 
         perf_beats = ASAP_ANNOTATIONS[path]["performance_beats"]
         score_beats = ASAP_ANNOTATIONS[path]["midi_score_beats"]
 
-        for e in perf_stream:
-            if isinstance(e, music21.tempo.MetronomeMark):
-                bps_perf = float(e.number)/60
-                print(bps_perf)
-                #break
-        else:
-            print(f"MISSING PERFORMANCE BPM {path}")
-            #raise ZeroDivisionError
-
-        bps_score = 0
-        for e in score_stream:
-            if isinstance(e, music21.tempo.MetronomeMark):
-                if bps_score and bps_score != float(e.number)/60:
-                    print(f"BPM CHANGES IN SCORE {path}")
-                    raise ZeroDivisionError
-                bps_score = float(e.number)/60
-        if not bps_score:
-            print(f"MISSING SCORE BPM {path}")
-            raise ZeroDivisionError 
-    
-
         shifted_notes = {}
         score_notes = {}
 
-        for elem in perf_stream:
-            if isinstance(elem, music21.chord.Chord):
-                notes = [note for note in elem]
-            elif isinstance(elem, music21.note.Note):
-                notes = [elem]
-            else:
-                continue
-            offset = elem.getOffsetBySite(perf_stream) / bps_perf
+        offset = 0
 
-            for i, b_off in enumerate(perf_beats):
-                if b_off > offset:
-                    a = 0 if i == 0 else perf_beats[i-1]
-                    b = b_off
-                    beat_index = i
-                    break
-            else:
-                a = perf_beats[-1]
-                b = perf_beats[-1] + (perf_beats[-1]-perf_beats[-2])
-                if offset > b:
-                    b = offset + .01
-                    print("LAST NOTE PAST LAST BEAT + 1!")
-                    print(offset)
-                    print(perf_beats[-2:])
-
-            
-            a_prime = 0 if beat_index == 0 else score_beats[beat_index-1]
-            b_prime = score_beats[beat_index]
-
-            new_offset = (b_prime - a_prime) / (b - a) * (offset - a) + a_prime
-
-            for note in notes:
-                if note.pitch.midi in shifted_notes:
-                    shifted_notes[note.pitch.midi].append((new_offset, offset, note.volume.velocity))
+        for msg in perf_mf:
+            if msg.type == "note_on" and msg.velocity > 0:
+                for i, b_off in enumerate(perf_beats):
+                    if b_off > offset:
+                        a = 0 if i == 0 else perf_beats[i-1]
+                        b = b_off
+                        beat_index = i
+                        break
                 else:
-                    shifted_notes[note.pitch.midi] = [(new_offset, offset, note.volume.velocity)]
+                    a = perf_beats[-1]
+                    b = perf_beats[-1] + (perf_beats[-1]-perf_beats[-2])
+                    if offset > b:
+                        b = offset + .01
+                        print("LAST NOTE PAST LAST BEAT + 1!")
+                        print(offset)
+                        print(perf_beats[-2:])
+
+                
+                a_prime = 0 if beat_index == 0 else score_beats[beat_index-1]
+                b_prime = score_beats[beat_index]
+
+                new_offset = (b_prime - a_prime) / (b - a) * (offset - a) + a_prime
+
+                
+                if msg.note in shifted_notes:
+                    shifted_notes[msg.note].append((new_offset, offset, msg.velocity))
+                else:
+                    shifted_notes[msg.note] = [(new_offset, offset, msg.velocity)]
+            offset += msg.time
         
-        for elem in score_stream:
-            if isinstance(elem, music21.chord.Chord):
-                notes = [note for note in elem]
-            elif isinstance(elem, music21.note.Note):
-                notes = [elem]
-            else:
-                continue
-            offset = elem.getOffsetBySite(score_stream) / bps_score
+        offset = 0
 
-            for note in notes:
-                if note.pitch.midi in score_notes:
-                    score_notes[note.pitch.midi].append([offset, False, 0])
+        for msg in score_mf:
+            if msg.type == "note_on" and msg.velocity > 0:
+                if msg.note in score_notes:
+                    score_notes[msg.note].append([offset, False, 0])
                 else:
-                    score_notes[note.pitch.midi] = [[offset, False, 0]]
+                    score_notes[msg.note] = [[offset, False, 0]]
+            offset += msg.time
         
         give_up = 0
 
@@ -123,7 +93,7 @@ def parse_midi(path=None, id=None):
             for offset, old_offset, vel in shifted_notes[pitch]:
                 idx_list = (np.abs(score_offsets - offset)).argsort()
                 for idx in idx_list:
-                    if abs(score_notes[pitch][idx][0] - offset) > 2:
+                    if abs(score_notes[pitch][idx][0] - offset) > 1:
                         give_up += 1
                         break
                     if score_notes[pitch][idx][1]:
