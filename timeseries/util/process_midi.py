@@ -18,8 +18,8 @@ def parse_midi(path=None, id=None):
     if path:
 
         if not ASAP_ANNOTATIONS[path]["score_and_performance_aligned"]:
-            print(f"Score & performance not aligned for {path}! Skipping.")
-            return None, None, None
+            
+            return None, None, None, None
 
         perf_path = os.path.join(ASAP_PATH, path)
         perf_ann_path = os.path.splitext(perf_path)[0]+'_annotations.txt'
@@ -47,10 +47,12 @@ def parse_midi(path=None, id=None):
 
         offset = 0
         playing_note_times = {}
-
+        
         for msg in perf_mf:
-            if msg.type == "note_on":
-                if msg.velocity > 0:
+            if msg.type == "note_on" or msg.type == "note_off":
+                if msg.type == "note_on" and msg.velocity > 0:
+                    if msg.note in playing_note_times:
+                        continue # DOUBLE NOTE???
                     for i, b_off in enumerate(perf_beats):
                         if b_off > offset:
                             a = 0 if i == 0 else perf_beats[i-1]
@@ -60,13 +62,14 @@ def parse_midi(path=None, id=None):
                     else:
                         a = perf_beats[-1]
                         b = perf_beats[-1] + (perf_beats[-1]-perf_beats[-2])
+                        beat_index = len(perf_beats)
                         if offset > b:
                             b = offset + .01
-                            print(f"Note past last bar in {path}!")
+                            #print(f"Note past last bar in {path}!")
 
                     
                     a_prime = 0 if beat_index == 0 else score_beats[beat_index-1]
-                    b_prime = score_beats[beat_index]
+                    b_prime = score_beats[beat_index-1] + (score_beats[beat_index-1] - score_beats[beat_index-2]) if beat_index == len(perf_beats) else score_beats[beat_index]
 
                     new_offset = (b_prime - a_prime) / (b - a) * (offset - a) + a_prime
                     playing_note_times[msg.note] = 0
@@ -76,6 +79,8 @@ def parse_midi(path=None, id=None):
                     else:
                         shifted_notes[msg.note] = [[new_offset, False, msg.velocity, 0]]
                 else:
+                    if msg.note not in playing_note_times:
+                        continue # DOUBLE END_NOTE?
                     shifted_notes[msg.note][-1][3] = playing_note_times[msg.note]
                     del playing_note_times[msg.note]
 
@@ -85,25 +90,27 @@ def parse_midi(path=None, id=None):
         
         offset = 0
         playing_note_times = {}
+        playing_currently = 0
+
         
         for msg in score_mf:
             offset += msg.time
             for key in playing_note_times:
                 playing_note_times[key] += msg.time
             
-            if msg.type == "note_on":
-
-                if msg.velocity > 0:
+            if msg.type == "note_on" or msg.type == "note_off":
+                if msg.type == "note_on" and msg.velocity > 0:
                     if msg.note in playing_note_times:
                         continue # DOUBLE NOTE???
+                    playing_currently += 1
                     if msg.note in score_notes:
                         if score_notes[msg.note][-1][0] == offset: # If there is a 0-length at this location already, reset it
-                            score_notes[msg.note][-1] = [offset, False, 0, len(all_timed_score_vels), 0, -1, True]
+                            score_notes[msg.note][-1] = [offset, False, 0, score_notes[msg.note][-1][3], 0, -1, playing_currently]
                             playing_note_times[msg.note] = 0
                             continue
-                        score_notes[msg.note].append([offset, False, 0, len(all_timed_score_vels), 0, -1, True])
+                        score_notes[msg.note].append([offset, False, 0, len(all_timed_score_vels), 0, -1, playing_currently])
                     else:
-                        score_notes[msg.note] = [[offset, False, 0, len(all_timed_score_vels), 0, -1, True]]
+                        score_notes[msg.note] = [[offset, False, 0, len(all_timed_score_vels), 0, -1, playing_currently]]
                     all_timed_score_vels.append(0)
                     all_timed_score_lengths.append(0)
 
@@ -112,12 +119,13 @@ def parse_midi(path=None, id=None):
 
                     if msg.note not in playing_note_times:
                         continue # DOUBLE END_NOTE?
+                        
+                    playing_currently -= 1
                     score_notes[msg.note][-1][5] = playing_note_times[msg.note]
 
                     del playing_note_times[msg.note]
 
 
-            
         
         give_up = 0
 
@@ -158,25 +166,33 @@ def parse_midi(path=None, id=None):
                     #j[5] = np.mean(all_timed_score_lengths[max(0, score_notes[i][ind][3]-3) : min(len(all_timed_score_vels), score_notes[i][ind][3]+3)])
 
         all_notes_and_data = []
+
+        missing = 0
+
         for note, occurances in score_notes.items():
             for occurance in occurances:
+                missing += 1 - int(occurance[1])
                 all_notes_and_data.append([note] + occurance)
 
         all_notes_and_data.sort(key=lambda note_press: (note_press[1], note_press[0])) # Sort by time, then note lowest -> highest
+        
 
-        return shifted_notes, score_notes, all_notes_and_data
+        return shifted_notes, score_notes, all_notes_and_data, missing
 
 # Midi_number, time_when_happens, matched?, velocity, link_to_flatlist(old), note_length_played, note_length_original, got_stop_signal?
 
 for i, row in METADATA.iterrows():
-    print(f"Processing {row['midi_performance']}")
+    print(f"Processing {row['midi_performance']}:  ", end="")
     processed_path = os.path.join(PROCESSED_PATH, row["midi_performance"])[:-4] + ".txt"
 
-    shifted, score, all_notes_and_data = parse_midi(row['midi_performance'])
+    shifted, score, all_notes_and_data, missing = parse_midi(row['midi_performance'])
 
     if not all_notes_and_data:
+        print(f"Score & performance not aligned! Skipped.")
         continue
-    
+
+    print(f"{missing} missing.")
+
     os.makedirs(os.path.dirname(processed_path), exist_ok=True)
     with open(processed_path, "w") as f:
         f.write("\n".join("\t".join(str(x) for x in a) for a in all_notes_and_data))
