@@ -49,6 +49,11 @@ def parse_midi(path=None, id=None):
         playing_note_times = {}
         
         for msg in perf_mf:
+
+            offset += msg.time
+            for key in playing_note_times:
+                playing_note_times[key] += msg.time
+            
             if msg.type == "note_on" or msg.type == "note_off":
                 if msg.type == "note_on" and msg.velocity > 0:
                     if msg.note in playing_note_times:
@@ -84,9 +89,7 @@ def parse_midi(path=None, id=None):
                     shifted_notes[msg.note][-1][3] = playing_note_times[msg.note]
                     del playing_note_times[msg.note]
 
-            offset += msg.time
-            for key in playing_note_times:
-                playing_note_times[key] += msg.time
+
         
         offset = 0
         playing_note_times = {}
@@ -124,8 +127,7 @@ def parse_midi(path=None, id=None):
                     score_notes[msg.note][-1][5] = playing_note_times[msg.note]
 
                     del playing_note_times[msg.note]
-
-
+        
         
         give_up = 0
 
@@ -142,8 +144,9 @@ def parse_midi(path=None, id=None):
                     if abs(shifted_notes[pitch][idx][0] - offset) > .5:
                         #print(offset, shifted_notes[pitch][idx][0])
                         break
-                    if False:
-                        pass
+                    if shifted_notes[pitch][idx][3] == 0:
+                        print("SKIPPING 0 LEN")
+                        continue
                     else: 
                         shifted_notes[pitch][idx][1] = True
                         score_notes[pitch][i][1] = True # Has been matched <- True
@@ -161,6 +164,7 @@ def parse_midi(path=None, id=None):
                     #j[6] = False
                     j[4] = np.sum(all_timed_score_lengths[max(0, score_notes[i][ind][3]-2) : min(len(all_timed_score_vels), score_notes[i][ind][3]+3)])/4
                 if j[5] == -1:
+                    print("NOT FOUND MIDI LENGTH")
                     #print(max(0, score_notes[i][ind][3]-3), min(len(all_timed_score_vels), score_notes[i][ind][3]+3), score_notes[i][ind], i, ind)
                     j[6] = False
                     #j[5] = np.mean(all_timed_score_lengths[max(0, score_notes[i][ind][3]-3) : min(len(all_timed_score_vels), score_notes[i][ind][3]+3)])
