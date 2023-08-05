@@ -215,8 +215,8 @@ if saving:
         shifted_by_piece = {}
 
         for name, piece in seq_by_piece.items():
-            timeshifted = {key: val[1:] for key, val in piece.items()}
-            timeshifted.update({f"-1_{key}": piece[key][:-1] for key in ["Note","Exact_L","Exact_H","Motion","Micro","Macro"]})
+            timeshifted = {key: val for key, val in piece.items()}
+            timeshifted.update({f"-1_{key}": [0.] + piece[key][:-1] for key in ["Note","Exact_L","Exact_H","Motion","Micro","Macro"]})
             shifted_by_piece[name] = timeshifted
 
 
