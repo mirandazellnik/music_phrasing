@@ -7,6 +7,8 @@ import numpy as np
 import seaborn as sn
 import matplotlib.pyplot as plt
 
+import music21
+
 saving = True
 load = False
 
@@ -26,7 +28,7 @@ ASAP_ANNOTATIONS = json.load(open(os.path.join(ASAP_PATH, "asap_annotations.json
 dists = [".01", ".05", ".10", ".50", "1.0", "2.0", "4.0"]
 
 
-cols = ["Note", "Time", "Len_P", "Len_M", "D_A", "Exact", "Exact_L", "Exact_H", "Motion", "BPM", "Len/BPM", "Len_Ratio", "Time_From", "Time_To"] + [f"W" + dist for dist in dists] + [f"B" + dist for dist in dists] + [f"A" + dist for dist in dists] + ["Velo", "Macro", "Micro"]
+cols = ["Note", "Time", "Len_P", "Len_M", "D_A", "Exact", "Exact_L", "Exact_H", "Motion", "BPM", "Len/BPM", "Len_Ratio", "Time_From", "Time_To", "Melodic_Charge"] + [f"W" + dist for dist in dists] + [f"B" + dist for dist in dists] + [f"A" + dist for dist in dists] + ["Velo", "Macro", "Micro"]
 seq_total = {cname:[] for cname in cols}
 seq_by_piece = {}
 
@@ -51,6 +53,9 @@ if not load:
         perf_path = os.path.join(ASAP_PATH, row["midi_performance"])
         score_path = os.path.join(os.path.dirname(perf_path), "midi_score.mid")
         mf = mido.MidiFile(score_path)
+        m21_score = music21.converter.parse(os.path.join(os.path.dirname(perf_path), "xml_score.xml"))
+        key_sig = m21_score.analyze('key')
+
 
         for elem in mf:
             if elem.type == 'set_tempo':
@@ -93,6 +98,8 @@ if not load:
         time_from_last = []
         time_to_next = []
 
+        melodic_charge = []
+
 
         for s, length in zip(lists[1], lists[3]):
             new_starts.append(s)
@@ -113,8 +120,15 @@ if not load:
             len_tempo.append(lists[3][n]/tempo)
 
             time_from_last.append(0)
-            time_to_next.append(0)
-
+            time_to_next.append(0) 
+            
+            note_over_12 = lists[0][n] % 12
+            mymap = {0: 0, 7: 1, 2: 2, 9: 3, 4: 4, 11: 5, 6: 6, 1: 7, 8: 8, 3: 9, 10: 10, 5: 11} # per circle of fifths
+            charge_from_key = (mymap[note_over_12] - key_sig.sharps) % 12 # shift over by sharps
+            if charge_from_key > 6:
+                charge_from_key = 12 - charge_from_key
+            charge_from_key = charge_from_key / 6
+            melodic_charge.append(charge_from_key)
 
             for pos, j in enumerate(new_starts[max(n-100, 0):n]):
                 if j < new_starts[n]:
@@ -176,7 +190,7 @@ if not load:
         maxtime = lists[1][-1]
         lists[1] = [x/maxtime for x in lists[1]] # Scale time from 0-1 for start-finish
 
-        lists = lists[:-1] + [down_while, exact, exact_l, exact_h, motion, tempo_bpm, len_tempo, length_ratio, time_from_last, time_to_next] + within + behind_only + ahead_only + [lists[-1]]
+        lists = lists[:-1] + [down_while, exact, exact_l, exact_h, motion, tempo_bpm, len_tempo, length_ratio, time_from_last, time_to_next, melodic_charge] + within + behind_only + ahead_only + [lists[-1]]
 
         averaged_vol = moving_average(lists[-1], 4)
         averaged_vol = moving_average(averaged_vol, 2)

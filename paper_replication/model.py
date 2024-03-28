@@ -112,7 +112,7 @@ else:
         for i in range(1):
             print(f"----------------------------------- MODEL {i+1} -----------------------------------")
             model = create_model(80, 80, .2, .2, 4.8276e-5)
-            model.fit(trd, trt, validation_data=(vad, vat), epochs=5, batch_size=32, verbose=2, callbacks=[tensorboard] if save_name else [])
+            model.fit(trd, trt, validation_data=(vad, vat), epochs=100, batch_size=32, verbose=2, callbacks=[tensorboard] if save_name else [])
             models.append(model)
         model.save(f"/stash/tlab/theom_intern/models/{save_name}/{goal}")
 
@@ -129,4 +129,3 @@ else:
         exp = f"{tet.iloc[row]['Micro']}"
         #de = f"{ted.iloc[row]['Len_M']}"
         print(f"{exp}\t{out}")
-
