@@ -33,10 +33,16 @@ assert goal in ["Micro", "Len_P"]
 
 print("Preparing dataset...")
 if goal == "Micro":
+    """trd, trt, vad, vat, ted, tet = prepare_dataset(
+        data_path, metadata_path,
+        ["Note", "Exact_L", "Len/BPM", "Exact_H", "Motion", "Micro"],
+        ["Len_M", "Melodic_Charge", "W.50", "B.10", "B.50", "A.10", "A.50", "W.50"],
+        ["Micro"]
+    )"""
     trd, trt, vad, vat, ted, tet = prepare_dataset(
         data_path, metadata_path,
-        ["Note", "Exact_L", "Exact_H", "Motion", "Micro"],
-        ["Len_M", "W.50", "B.10", "B.50", "A.10", "A.50", "W.50"],
+        ["Note", "Exact_L", "Len/BPM", "Micro"],
+        ["Len_M", "Melodic_Charge"],
         ["Micro"]
     )
 elif goal == "Len_P":
