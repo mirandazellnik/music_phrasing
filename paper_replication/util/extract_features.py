@@ -53,7 +53,7 @@ if not load:
         perf_path = os.path.join(ASAP_PATH, row["midi_performance"])
         score_path = os.path.join(os.path.dirname(perf_path), "midi_score.mid")
         mf = mido.MidiFile(score_path)
-        m21_score = music21.converter.parse(os.path.join(os.path.dirname(perf_path), "xml_score.xml"))
+        m21_score = music21.converter.parse(os.path.join(os.path.dirname(perf_path), "xml_score.musicxml"))
         key_sig = m21_score.analyze('key')
 
 
