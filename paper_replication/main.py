@@ -36,8 +36,8 @@ assert goal in ["Micro", "Len_P"]
 
 test_data_vel, test_goals_vel = prepare_dataset(
     data_path, metadata_path,
-    ["Note", "Exact_L", "Exact_H", "Motion", "Micro"],
-    ["Len_M", "W.50", "B.10", "B.50", "A.10", "A.50", "W.50"],
+    ["Note", "Exact_L", "Len/BPM", "Exact_H",  "Motion", "Micro"],
+    ["Len_M", "Melodic_Charge", "W.50", "B.10", "B.50", "A.10", "A.50", "W.50"],
     ["Micro"],
     test_data_only=True
 )
@@ -56,7 +56,7 @@ piece_data_vel = test_data_vel[piece]
 piece_data_len = test_data_len[piece]
 
 model_vel = keras.models.load_model(f"/stash/tlab/theom_intern/models/{model_name}/{goal}")
-model_len = keras.models.load_model(f"/stash/tlab/theom_intern/models/{model_name}/Len_P")
+#model_len = keras.models.load_model(f"/stash/tlab/theom_intern/models/{model_name}/Len_P")
 
 
 outputs_vel = []
@@ -73,12 +73,13 @@ for row in range(len(piece_data_vel)):
     outputs_vel.append(out)
 
     exp = f"{test_goals_vel[piece].iloc[row]['Micro']}"
-
+    
+    """
     piece_data_len.loc[row, "Micro"] = float(out) 
     inputs2 = piece_data_len.loc[row]
     out_len = model_len(inputs2)[0][0]
     outputs_len.append(out_len)
-
+    """
     #de = f"{ted.iloc[row]['Len_M']}"
     print(f"{exp}\t{out}")
 

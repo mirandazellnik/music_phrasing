@@ -45,7 +45,7 @@ if goal == "Micro":
         data_path, metadata_path,
         ["Note", "Exact_L", "Len/BPM", "Micro"],
         ["Len_M", "Melodic_Charge"],
-        ["Micro"]
+        ["Micro"],
     )
 elif goal == "Len_P":
     trd, trt, vad, vat, ted, tet = prepare_dataset(
@@ -56,7 +56,7 @@ elif goal == "Len_P":
     )
 
 tensorboard = keras.callbacks.TensorBoard(f"/stash/tlab/theom_intern/ts_logs/{save_name}/tensorboard")
-
+ 
 def storeModel(model, subname="main"):
     # Its important to use binary mode
     os.makedirs(os.path.dirname(f"/stash/tlab/theom_intern/res_models/{save_name}/{subname}/model.pkl"), exist_ok=True)
@@ -65,18 +65,18 @@ def storeModel(model, subname="main"):
     pickle.dump(model, dbfile)                    
     dbfile.close()
  
-def loadModel(subname="main"):
+def loadData():
     # for reading also binary mode is important
-    dbfile = open(f"/stash/tlab/theom_intern/res_models/{save_name}/{subname}/model.pkl", 'rb')    
+    dbfile = open('examplePickle', 'rb')    
     model = pickle.load(dbfile)
     return model
 
 def create_model(lr=.5, sr=.9):
     
     normalizer = keras.layers.Normalization(axis=-1)
-    normalizer.adapt(trd)
+    #normalizer.adapt(trd)
 
-    reservoirs = [Reservoir(100, lr=lr, sr=sr) for i in range(len(np.squeeze(trd.to_numpy())[0]))]
+    reservoirs = [Reservoir(100, lr=lr, sr=sr) for i in range(len(np.squeeze(list(trd.values())[0].to_numpy())[0]))]
     print(f"{len(reservoirs)} Res[]s")
     ridge = Ridge(ridge=1e-3)
 
@@ -129,19 +129,22 @@ else:
             print(f"----------------------------------- MODEL {i+1} -----------------------------------")
             model = create_model()
             #reservoir, readout = Reservoir(100, lr=0.2, sr=1.0), Ridge(ridge=1e-3)
-            trd, trt, vad = map(lambda abc: np.squeeze(abc.to_numpy()), [trd, trt, vad])
+            #trd = list(map(lambda abc: np.squeeze(abc.to_numpy()), trd.values()))
+            #trt = list(map(lambda abc: np.squeeze(abc.to_numpy()).reshape(-1,1), trt.values()))
             #trd = np.array([1,2,3,4,5,6,7,8,9,10,1,2,3,4,5,6,7,8,9,10,1,2,3,4,5,6,7,8,9,10,1,2,3,4,5,6,7,8,9,10,1,2,3,4,5,6,7,8,9,10]).reshape(-1,1)
             #trt = np.array([1,2,3,4,5,6,7,8,9,10,1,2,3,4,5,6,7,8,9,10,1,2,3,4,5,6,7,8,9,10,1,2,3,4,5,6,7,8,9,10,1,2,3,4,5,6,7,8,9,10]).reshape(-1,1)
             #vad = np.array([1,2,3,4,5,6,7,8,9,10,1,2,3,4,5,6,7,8,9,10,1,2,3,4,5,6,7,8,9,10,1,2,3,4,5,6,7,8,9,10,1,2,3,4,5,6,7,8,9,10]).reshape(-1,1)
 
-            trt = trt.reshape(-1, 1)
+            print(len(trd), trd[0].shape, trt[0].shape)
 
-            print(trd.shape, trt.shape)
-            #model.fit(trd, trt)
             model.fit(trd, trt)
+            #for j in range(len(trd)):
+            #    print(f"Piece {j}")
+            #    model.fit(trd[j], trt[j], reset=True)
             #model.fit(trd, trt, validation_data=(vad, vat), epochs=100, batch_size=32, verbose=2, callbacks=[tensorboard] if save_name else [])
             #models.append(model)
         #model.save(f"/stash/tlab/theom_intern/models/{save_name}/{goal}")   
+        
         test_data_vel, test_goals_vel = prepare_dataset(
             data_path, metadata_path,
             ["Note", "Exact_L", "Len/BPM", "Micro"],
@@ -159,14 +162,12 @@ else:
 
         for i, piece in enumerate(pieces):
 
-
             piece_data_vel = test_data_vel[piece]
 
             vad = np.squeeze(piece_data_vel.to_numpy())
             piece_len = vad.shape[0]
 
             predictions = model.run(vad, reset=True)
-
 
             piece_mse = 0
 
@@ -182,49 +183,6 @@ else:
         print(f"No model: {no_model_mse / total_mse_len}")
 
         storeModel(model)
-
-    else:
-        model = loadModel()
-        test_data_vel, test_goals_vel = prepare_dataset(
-            data_path, metadata_path,
-            ["Note", "Exact_L", "Len/BPM", "Micro"],
-            ["Len_M", "Melodic_Charge"],
-            ["Micro"],
-            test_data_only=True
-        )
-
-        pieces = list(test_data_vel.keys())
-        print(len(pieces))
-
-        total_mse = 0
-        no_model_mse = 0
-        total_mse_len = 0
-
-        for i, piece in enumerate(pieces):
-            
-            piece_data_vel = test_data_vel[piece]
-
-            vad = np.squeeze(piece_data_vel.to_numpy())
-            piece_len = vad.shape[0]
-
-            # PRINT PREDICTED, EXPECTED
-            predictions = model.run(vad, reset=True)
-            #for j in range(len(predictions)):
-            #    print(f"{predictions[j][0]}\t{test_goals_vel[piece].iloc[j]['Micro']}")
-
-
-            piece_mse = 0
-
-            for j in range(len(predictions)):
-                piece_mse += (predictions[j][0] - test_goals_vel[piece].iloc[j]["Micro"])**2
-                no_model_mse += (test_goals_vel[piece].iloc[j]["Micro"])**2
-                #print(f'{predictions[i][0]}\t{test_goals_vel[piece].iloc[i]["Micro"]}')
-            total_mse += piece_mse
-            total_mse_len += piece_len
-            piece_mse /= piece_len
-            print(f"Piece {i}: {piece_mse}")
-        print(f"All pieces: {total_mse / total_mse_len}")
-        print(f"No model: {no_model_mse / total_mse_len}")
 
 
     model = keras.models.load_model(f"/stash/tlab/theom_intern/models/{save_name}/{goal}")
