@@ -87,15 +87,7 @@ def create_model(lr=.5, sr=.9):
 
 def optimizer(hp):
 
-    first_layer = hp.Int("first_layer", min_value=10, max_value=2560, step=2, sampling='log')
-    second_layer = hp.Int("second_layer", min_value=5, max_value=2560, step=2, sampling='log')
-    dropout_1 = hp.Float("d1", min_value = 0, max_value = .5, step=.1)
-    dropout_2 = hp.Float("d2", min_value = .0, max_value = .5, step=.1)
-    lr = hp.Float("lr", min_value = .00001, max_value = .01, sampling="log")
-
-    model = create_model(first_layer, second_layer, dropout_1, dropout_2, lr)
-
-    return model
+    pass
 
 if args.tune:
 
@@ -135,6 +127,8 @@ else:
             print(len(pieces))
 
             for i, piece in enumerate(pieces):
+                if i > 3:
+                    break
 
                 train_piece_data = trd[piece]
                 train_piece_goal = trt[piece]
@@ -151,13 +145,13 @@ else:
                                 
                 model.train(train_piece_data, train_piece_goal, reset=True)
 
-            trd, trt, vad = map(lambda abc: np.squeeze(abc.to_numpy()), [trd, trt, vad])
+            #trd, trt, vad = map(lambda abc: np.squeeze(abc.to_numpy()), [trd, trt, vad])
 
-            trt = trt.reshape(-1, 1)
+            #trt = trt.reshape(-1, 1)
 
-            print(trd.shape, trt.shape)
+            #print(trd.shape, trt.shape)
             #model.fit(trd, trt)
-            model.fit(trd, trt)
+            #model.fit(trd, trt)
             #model.fit(trd, trt, validation_data=(vad, vat), epochs=100, batch_size=32, verbose=2, callbacks=[tensorboard] if save_name else [])
             #models.append(model)
         #model.save(f"/stash/tlab/theom_intern/models/{save_name}/{goal}")   
@@ -190,8 +184,10 @@ else:
             piece_mse = 0
 
             for j in range(len(predictions)):
-                piece_mse += (predictions[i][0] - test_goals_vel[piece].iloc[i]["Micro"])**2
-                no_model_mse += (test_goals_vel[piece].iloc[i]["Micro"])**2
+                if i == 8:
+                    print(f"{predictions[j][0]}\t{test_goals_vel[piece].iloc[j]['Micro']}")
+                piece_mse += (predictions[j][0] - test_goals_vel[piece].iloc[j]["Micro"])**2
+                no_model_mse += (test_goals_vel[piece].iloc[j]["Micro"])**2
                 #print(f'{predictions[i][0]}\t{test_goals_vel[piece].iloc[i]["Micro"]}')
             total_mse += piece_mse
             total_mse_len += piece_len

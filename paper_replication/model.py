@@ -33,18 +33,19 @@ assert goal in ["Micro", "Len_P"]
 
 print("Preparing dataset...")
 if goal == "Micro":
-    """trd, trt, vad, vat, ted, tet = prepare_dataset(
+    trd, trt, vad, vat, ted, tet = prepare_dataset(
         data_path, metadata_path,
         ["Note", "Exact_L", "Len/BPM", "Exact_H", "Motion", "Micro"],
         ["Len_M", "Melodic_Charge", "W.50", "B.10", "B.50", "A.10", "A.50", "W.50"],
         ["Micro"]
-    )"""
+    )
+    """
     trd, trt, vad, vat, ted, tet = prepare_dataset(
         data_path, metadata_path,
         ["Note", "Exact_L", "Len/BPM", "Micro"],
         ["Len_M", "Melodic_Charge"],
         ["Micro"]
-    )
+    )"""
 elif goal == "Len_P":
     trd, trt, vad, vat, ted, tet = prepare_dataset(
         data_path, metadata_path,
@@ -118,7 +119,7 @@ else:
         for i in range(1):
             print(f"----------------------------------- MODEL {i+1} -----------------------------------")
             model = create_model(80, 80, .2, .2, 4.8276e-5)
-            model.fit(trd, trt, validation_data=(vad, vat), epochs=100, batch_size=32, verbose=2, callbacks=[tensorboard] if save_name else [])
+            model.fit(trd, trt, validation_data=(vad, vat), epochs=5, batch_size=32, verbose=2, callbacks=[tensorboard] if save_name else [])
             models.append(model)
         model.save(f"/stash/tlab/theom_intern/models/{save_name}/{goal}")
 
