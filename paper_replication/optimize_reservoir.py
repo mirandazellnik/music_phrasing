@@ -155,6 +155,7 @@ def objective(dataset, config, *, N, sr, lr, input_scaling, ridge, seed):
     
     return {'loss': np.mean(losses)}
 
+
 if args.tune:
     best = research(objective, [trd, trt, vad, vat], f"/stash/tlab/theom_intern/hp_model_configs/{hyperopt_config['exp']}.config.json")
     fig = plot_hyperopt_report(hyperopt_config["exp"], ("lr", "sr", "ridge"), metric="loss")

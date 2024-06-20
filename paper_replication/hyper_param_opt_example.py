@@ -28,8 +28,8 @@ hyperopt_config = {
 
 # we precautionously save the configuration in a JSON file
 # each file will begin with a number corresponding to the current experimentation run number.
-with open(f"hp_model_configs/{hyperopt_config['exp']}.config.json", "w+") as f:
-    json.dump(hyperopt_config, f)
+#with open(f"hp_model_configs/{hyperopt_config['exp']}.config.json", "w+") as f:
+ #   json.dump(hyperopt_config, f)
 
 
 # Objective functions accepted by ReservoirPy must respect some conventions:
