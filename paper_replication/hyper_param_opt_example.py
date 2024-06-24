@@ -3,9 +3,9 @@ import json
 import numpy as np
 import matplotlib.pyplot as plt
 
-from reservoirpy.observables import nrmse, rsquare
-from reservoirpy.hyper import plot_hyperopt_report
-from reservoirpy.hyper import research
+from reservoirpy.observables import nrmse, rsquare # type: ignore
+from reservoirpy.hyper import plot_hyperopt_report # type: ignore
+from reservoirpy.hyper import research # type: ignore
 
 from model import model_build, model_train, model_predict
 
@@ -28,8 +28,8 @@ hyperopt_config = {
 
 # we precautionously save the configuration in a JSON file
 # each file will begin with a number corresponding to the current experimentation run number.
-with open(f"hp_model_configs/{hyperopt_config['exp']}.config.json", "w+") as f:
-    json.dump(hyperopt_config, f)
+#with open(f"hp_model_configs/{hyperopt_config['exp']}.config.json", "w+") as f:
+ #   json.dump(hyperopt_config, f)
 
 
 # Objective functions accepted by ReservoirPy must respect some conventions:

@@ -7,8 +7,8 @@ from tensorflow import keras
 import keras_tuner
 import pickle
 import numpy as np
-from reservoirpy.nodes import Reservoir, Ridge, ESN
 
+from reservoirpy.nodes import Reservoir, Ridge, ESN # type: ignore
 
 from util.load_data import prepare_dataset
 

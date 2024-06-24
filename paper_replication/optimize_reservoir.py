@@ -9,19 +9,21 @@ import random
 #import keras_tuner
 import pickle
 import numpy as np
-from reservoirpy.nodes import Reservoir, Ridge
-from reservoirpy.hyper import plot_hyperopt_report
-from reservoirpy.hyper import research
-from reservoirpy.observables import mse, rsquare
 
+from reservoirpy.observables import mse, rsquare
+from reservoirpy.nodes import Reservoir, Ridge # type: ignore
+from reservoirpy.hyper import plot_hyperopt_report # type: ignore
+from reservoirpy.hyper import research # type: ignore
 from util.load_data import prepare_dataset
 from util.reservoir_model import create_model, load_model, store_model
+
 
 data_path = "/stash/tlab/theom_intern/midi_data/asap-dataset-processed/shifted_by_piece.json"
 metadata_path = "/stash/tlab/theom_intern/midi_data/asap-dataset-master/metadata.csv"
 
 argParser = argparse.ArgumentParser()
 argParser.add_argument("name", nargs="?", help="Name of this run, for logging, model saving, etc.", type=str)
+argParser.add_argument("cpu_name", nargs="?", help="Name of cpu this file is running on, for logging, model saving, etc.", type=str)
 argParser.add_argument("-t", "--no-train", help="Don't train a new model, instead load the existing model.", action=argparse.BooleanOptionalAction)
 argParser.add_argument("-T", "--tune", help="Tune the model with hyperband.", action=argparse.BooleanOptionalAction)
 argParser.add_argument("-g", "--goal", help="Goal variable")
@@ -29,6 +31,7 @@ args = argParser.parse_args()
 
 assert args.name
 save_name = args.name
+cpu_name = args.cpu_name
 goal = args.goal
 if not goal:
     goal = "Micro"
@@ -61,7 +64,7 @@ elif goal == "Len_P":
         ["Len_P"]
     )
 
-
+"""
 hyperopt_config = {
     "exp": f"/stash/tlab/theom_intern/hyper_exp_data/{save_name}",    # the experimentation name
     "hp_max_evals": 300,              # the number of differents sets of parameters hyperopt has to try
@@ -80,6 +83,7 @@ hyperopt_config = {
 
 with open(f"/stash/tlab/theom_intern/hp_model_configs/{save_name}.config.json", "w+") as f:
     json.dump(hyperopt_config, f)
+"""
 
 test_data_vel, test_goals_vel = prepare_dataset(
     data_path, metadata_path,
@@ -89,8 +93,6 @@ test_data_vel, test_goals_vel = prepare_dataset(
     test_data_only=True
 )
 
-with open(f"/stash/tlab/theom_intern/results_texts/{save_name}.txt", "a") as f:
-    f.write(f"-----------------------")
 
 def objective(dataset, config, *, N, sr, lr, input_scaling, ridge, seed):
     trd, trt, vad, vat = dataset
@@ -179,7 +181,7 @@ def objective(dataset, config, *, N, sr, lr, input_scaling, ridge, seed):
 
         trial_seed += 1
 
-    with open(f"/stash/tlab/theom_intern/results_texts/{save_name}.txt", "a") as f:
+    with open(f"/stash/tlab/theom_intern/distributed_reservoir_runs/{save_name}/{cpu_name}_hp_search/{cpu_name}_all_hps.txt", "a") as f:
         f.write(f"\n{N}\t{sr}\t{lr}\t{ridge}\t{input_scaling}\t{np.mean(losses)}")
 
     if not args.tune:
@@ -189,11 +191,14 @@ def objective(dataset, config, *, N, sr, lr, input_scaling, ridge, seed):
     return {'loss': np.mean(losses),
             'r2': np.mean(r2s)}
 
+
 if args.tune:
-    best = research(objective, [trd, trt, vad, vat], f"/stash/tlab/theom_intern/hp_model_configs/{save_name}.config.json")
-    print(best)
-    fig = plot_hyperopt_report(hyperopt_config["exp"], ("lr", "sr", "ridge"), metric="r2")
-    fig.savefig("/stash/tlab/theom_intern/figure2.png")
+    best = research(objective, [trd, trt, vad, vat], f"/stash/tlab/theom_intern/distributed_reservoir_runs/{save_name}/{cpu_name}_hp_search/{cpu_name}.config.json")
+    with open(f"/stash/tlab/theom_intern/distributed_reservoir_runs/{save_name}/{cpu_name}_hp_search/{cpu_name}_best_hps.txt", "a") as f:
+        f.write(str(best))
+    os.mkdir(f"/stash/tlab/theom_intern/distributed_reservoir_runs/{save_name}/{cpu_name}_hp_search/results")
+    fig = plot_hyperopt_report(f"/stash/tlab/theom_intern/distributed_reservoir_runs/{save_name}/{cpu_name}_hp_search", ("lr", "sr", "ridge"), metric="loss")
+    fig.savefig("/stash/tlab/theom_intern/figure1.png")
     fig.show(block=True)
 elif not args.no_train:
     print(objective([trd,trt,vad,vat], {"instances_per_trial":1}, N=1000, sr=0.07966435869333038, lr=0.38264094967620665, ridge=0.0029801797509298408, input_scaling=1.0, seed=1234))
@@ -258,6 +263,7 @@ elif not args.no_train:
     print(f"No model: {no_model_mse / total_mse_len}")
 
     # storeModel(model)
+
 else:
     pass
     # model_to_test = load_model(name)
