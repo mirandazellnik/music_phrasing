@@ -3,23 +3,25 @@ import os
 import argparse
 import json
 
-import tensorflow
-from tensorflow import keras
-import keras_tuner
+#import tensorflow
+#from tensorflow import keras
+#import keras_tuner
 import pickle
 import numpy as np
-from reservoirpy.nodes import Reservoir, Ridge
-from reservoirpy.hyper import plot_hyperopt_report
-from reservoirpy.hyper import research
 
+from reservoirpy.nodes import Reservoir, Ridge # type: ignore
+from reservoirpy.hyper import plot_hyperopt_report # type: ignore
+from reservoirpy.hyper import research # type: ignore
 from util.load_data import prepare_dataset
 from util.reservoir_model import create_model, load_model, store_model
+
 
 data_path = "/stash/tlab/theom_intern/midi_data/asap-dataset-processed/shifted_by_piece.json"
 metadata_path = "/stash/tlab/theom_intern/midi_data/asap-dataset-master/metadata.csv"
 
 argParser = argparse.ArgumentParser()
 argParser.add_argument("name", nargs="?", help="Name of this run, for logging, model saving, etc.", type=str)
+argParser.add_argument("cpu_name", nargs="?", help="Name of cpu this file is running on, for logging, model saving, etc.", type=str)
 argParser.add_argument("-t", "--no-train", help="Don't train a new model, instead load the existing model.", action=argparse.BooleanOptionalAction)
 argParser.add_argument("-T", "--tune", help="Tune the model with hyperband.", action=argparse.BooleanOptionalAction)
 argParser.add_argument("-g", "--goal", help="Goal variable")
@@ -27,6 +29,7 @@ args = argParser.parse_args()
 
 assert args.name
 save_name = args.name
+cpu_name = args.cpu_name
 goal = args.goal
 if not goal:
     goal = "Micro"
@@ -59,26 +62,6 @@ elif goal == "Len_P":
         ["Len_P"]
     )
 
-
-hyperopt_config = {
-    "exp": "hyperopt-test",    # the experimentation name
-    "hp_max_evals": 84,              # the number of differents sets of parameters hyperopt has to try
-    "hp_method": "random",            # the method used by hyperopt to chose those sets (see below)
-    "seed": 42,                       # the random state seed, to ensure reproducibility
-    "instances_per_trial": 5,         # how many random ESN will be tried with each sets of parameters
-    "hp_space": {                     # what are the ranges of parameters explored
-        "N": ["choice", 20],             # the number of neurons is fixed to 500
-        "sr": ["loguniform", 1e-2, 10],   # the spectral radius is log-uniformly distributed between 1e-2 and 10
-        "lr": ["loguniform", 1e-3, 1],    # idem with the leaking rate, from 1e-3 to 1
-        "input_scaling": ["choice", 1.0], # the input scaling is fixed
-        "ridge": ["loguniform", 1e-8, 1e1],        # and so is the regularization parameter.
-        "seed": ["choice", 1234]          # an other random seed for the ESN initialization
-    }
-}
-
-with open(f"/stash/tlab/theom_intern/hp_model_configs/{hyperopt_config['exp']}.config.json", "w+") as f:
-    json.dump(hyperopt_config, f)
-
 test_data_vel, test_goals_vel = prepare_dataset(
     data_path, metadata_path,
     ["Note", "Exact_L", "Len/BPM", "Micro"],
@@ -87,8 +70,6 @@ test_data_vel, test_goals_vel = prepare_dataset(
     test_data_only=True
 )
 
-with open(f"/stash/tlab/theom_intern/results_texts/{save_name}.txt", "a") as f:
-    f.write(f"-----------------------")
 
 def objective(dataset, config, *, N, sr, lr, input_scaling, ridge, seed):
     trd, trt, vad, vat = dataset
@@ -150,15 +131,18 @@ def objective(dataset, config, *, N, sr, lr, input_scaling, ridge, seed):
 
         trial_seed += 1
 
-    with open(f"/stash/tlab/theom_intern/results_texts/{save_name}.txt", "a") as f:
+    with open(f"/stash/tlab/theom_intern/distributed_reservoir_runs/{save_name}/{cpu_name}_hp_search/{cpu_name}_all_hps.txt", "a") as f:
         f.write(f"\n{N}\t{sr}\t{lr}\t{ridge}\t{input_scaling}\t{np.mean(losses)}")
     
     return {'loss': np.mean(losses)}
 
 
 if args.tune:
-    best = research(objective, [trd, trt, vad, vat], f"/stash/tlab/theom_intern/hp_model_configs/{hyperopt_config['exp']}.config.json")
-    fig = plot_hyperopt_report(hyperopt_config["exp"], ("lr", "sr", "ridge"), metric="loss")
+    best = research(objective, [trd, trt, vad, vat], f"/stash/tlab/theom_intern/distributed_reservoir_runs/{save_name}/{cpu_name}_hp_search/{cpu_name}.config.json")
+    with open(f"/stash/tlab/theom_intern/distributed_reservoir_runs/{save_name}/{cpu_name}_hp_search/{cpu_name}_best_hps.txt", "a") as f:
+        f.write(str(best))
+    os.mkdir(f"/stash/tlab/theom_intern/distributed_reservoir_runs/{save_name}/{cpu_name}_hp_search/results")
+    fig = plot_hyperopt_report(f"/stash/tlab/theom_intern/distributed_reservoir_runs/{save_name}/{cpu_name}_hp_search", ("lr", "sr", "ridge"), metric="loss")
     fig.savefig("/stash/tlab/theom_intern/figure1.png")
     fig.show()
 
@@ -218,7 +202,7 @@ elif not args.no_train:
     print(f"All pieces: {total_mse / total_mse_len}")
     print(f"No model: {no_model_mse / total_mse_len}")
 
-    storeModel(model)
+    store_model(model)
 else:
     pass
     # model_to_test = load_model(name)

@@ -1,14 +1,14 @@
+import os
 import json
 import subprocess
 import argparse
 import copy
 import re
 
-from reservoirpy.hyper import research
-
 
 argParser = argparse.ArgumentParser()
 argParser.add_argument("name", nargs="?", help="Name of this run, for logging, model saving, etc.", type=str)
+#argParser.add_argument("-c", help="Location of config file that this run uses")
 argParser.add_argument("-t", "--no-train", help="Don't train a new model, instead load the existing model.", action=argparse.BooleanOptionalAction)
 argParser.add_argument("-T", "--tune", help="Tune the model with hyperband.", action=argparse.BooleanOptionalAction)
 argParser.add_argument("-g", "--goal", help="Goal variable")
@@ -17,9 +17,40 @@ args = argParser.parse_args()
 assert args.name
 save_name = args.name
 goal = args.goal
-if not goal:
-    goal = "Micro"
-assert goal in ["Micro", "Len_P"]
+no_train_arg = False
+tune_arg = False
+if args.no_train:
+    no_train_arg = '-t'
+if args.tune:
+    tune_arg = '-T'
+if goal:
+    goal = '-g'
+
+
+hyperopt_config = {
+    "exp": save_name,    # the experimentation name
+    "hp_max_evals": 123,              # the number of differents sets of parameters hyperopt has to try
+    "hp_method": "random",            # the method used by hyperopt to chose those sets (see below)
+    "seed": 42,                       # the random state seed, to ensure reproducibility
+    "instances_per_trial": 10,         # how many random ESN will be tried with each sets of parameters
+    "hp_space": {                     # what are the ranges of parameters explored
+        "N": ["choice", 500],             # the number of neurons is fixed to 500
+        "sr": ["loguniform", 1e-2, 10],   # the spectral radius is log-uniformly distributed between 1e-2 and 10
+        "lr": ["loguniform", 1e-3, 1],    # idem with the leaking rate, from 1e-3 to 1
+        "input_scaling": ["choice", 1.0], # the input scaling is fixed
+        "ridge": ["loguniform", 1e-8, 1e1],        # and so is the regularization parameter.
+        "seed": ["choice", 1234]          # an other random seed for the ESN initialization
+    }
+}
+
+try: # try to make the directory that will store the runs with this config file, but if it is already made, we know the config
+    # file is already made as well and we don't write to it
+    os.mkdir(f"/stash/tlab/theom_intern/distributed_reservoir_runs/{save_name}")
+    with open(f"/stash/tlab/theom_intern/distributed_reservoir_runs/{save_name}/{save_name}.config.json", "w+") as f:
+        json.dump(hyperopt_config, f)
+
+except FileExistsError:
+    pass
 
 
 def find_config_increments(parameter, config_dict, num_cpus):
@@ -53,8 +84,8 @@ def create_configs(num_cpus, base_config_path, variable_parameter): # variable_p
 def gather_cpus(cpus_to_search):
     cpus = []
     for cpu in cpus_to_search:
-        cpu_data = subprocess.run('sosh ' + cpu + ' w', shell=True).stdout
-        load_avg_string = re.search(' load average: \d+.\d+', cpu_data)
+        cpu_data = subprocess.run('ssh ' + cpu + ' w', shell=True, text=True, capture_output=True).stdout
+        load_avg_string = re.search(r' load average: \d+.\d+', cpu_data)
         load_avg = float(load_avg_string.group().split()[2])
         if load_avg <= 3.0:
             cpus.append(cpu)
@@ -67,26 +98,43 @@ def correlate_cpus_and_configs(variable_parameter):
     cpus_to_search = ['arve', 'birs', 'doubs', 'inn', 'kander', 'linth', 'lonza', 'orbe', 'reuss', 'rhine', 'rhone', 'saane',
                        'thur', 'ticino']
     cpus = gather_cpus(cpus_to_search)
+    #cpus = ['arve', 'birs', 'inn', 'kander']
     num_cpus = len(cpus)
     
     parameter = variable_parameter
-    configs = create_configs(num_cpus, "/stash/tlab/theom_intern/hp_model_configs/search_space.json", parameter)
+    configs = create_configs(num_cpus, f"/stash/tlab/theom_intern/distributed_reservoir_runs/{save_name}/{save_name}.config.json", parameter)
     cpus_and_configs = {}
     
     for i, cpu in enumerate(cpus):
+        os.mkdir(f"/stash/tlab/theom_intern/distributed_reservoir_runs/{save_name}/{cpu}_hp_search")
+        with open(f"/stash/tlab/theom_intern/distributed_reservoir_runs/{save_name}/{cpu}_hp_search/{cpu}.config.json", "w+") as f:
+            json.dump(configs[i], f)
+
         cpus_and_configs[cpu] = configs[i]
     
     return cpus_and_configs
 
+def a(word):
+    if word:
+        return str(word)
+    else:
+        return ''
+
 def run_file_on_cpu(cpu_name, file_path, session_name, terminal_args): # file path is the whole file path from home
     # does not return anything
     subprocess.run('tmux new-window -S -n ' + cpu_name + '_window', shell=True)
-
-    set_up_file_command = f'tmux send-keys -t {session_name} -l "ssh {cpu_name} python {file_path} {terminal_args.name} {terminal_args.no_train} {terminal_args.tune} {terminal_args.goal}"'
-    run_file_command = f'tmux send-keys -t {session_name} "Enter"'
     
-    subprocess.run(set_up_file_command, shell=True)
-    subprocess.run(run_file_command, shell=True)    
+    ssh_into_cpu_command = f'tmux send-keys -t {session_name} -l "ssh {cpu_name}"'
+    set_up_conda_env_command = f'tmux send-keys -t {session_name} -l "conda activate music_phrasing_env"'
+    run_file_command = f'tmux send-keys -t {session_name} -l "python3 {file_path} {terminal_args.name} {cpu_name} {a(no_train_arg)} {a(tune_arg)} {a(goal)}"'
+    enter_command = f'tmux send-keys -t {session_name} "Enter"'
+     
+    subprocess.run(ssh_into_cpu_command, shell=True)
+    subprocess.run(enter_command, shell=True)
+    subprocess.run(set_up_conda_env_command, shell=True)
+    subprocess.run(enter_command, shell=True)
+    subprocess.run(run_file_command, shell=True)
+    subprocess.run(enter_command, shell=True)
 
 def run_file_on_all_cpus(cpus, hp_optimization_file_path, tmux_session_name, terminal_args): # hp_optimization_file_path is the path to the
     # file we are running as a string
@@ -106,4 +154,4 @@ def hp_optimization_parallelized(hp_optimization_file_path, tmux_session_name, t
     run_file_on_all_cpus(cpus, hp_optimization_file_path, tmux_session_name, terminal_args)
 
 
-hp_optimization_parallelized('~/Downloads/music_phrasing/paper_replication/optimize_reservoir.py', 'test_session')
+hp_optimization_parallelized('~/Downloads/music_phrasing/paper_replication/optimize_reservoir.py', 'test_session_2', args)

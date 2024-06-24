@@ -3,9 +3,9 @@ import json
 import numpy as np
 import matplotlib.pyplot as plt
 
-from reservoirpy.observables import nrmse, rsquare
-from reservoirpy.hyper import plot_hyperopt_report
-from reservoirpy.hyper import research
+from reservoirpy.observables import nrmse, rsquare # type: ignore
+from reservoirpy.hyper import plot_hyperopt_report # type: ignore
+from reservoirpy.hyper import research # type: ignore
 
 from model import model_build, model_train, model_predict
 
