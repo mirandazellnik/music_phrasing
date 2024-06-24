@@ -93,8 +93,9 @@ test_data_vel, test_goals_vel = prepare_dataset(
     test_data_only=True
 )
 
-
 def objective(dataset, config, *, N, sr, lr, input_scaling, ridge, seed):
+    global current_run
+    
     trd, trt, vad, vat = dataset
 
     trd_keys = list(trd.keys())
@@ -180,6 +181,10 @@ def objective(dataset, config, *, N, sr, lr, input_scaling, ridge, seed):
         r2s.append(r2)
 
         trial_seed += 1
+        current_run += 1
+
+        with open(f"/stash/tlab/theom_intern/distributed_reservoir_runs/{save_name}/{cpu_name}_hp_search/completion.txt", "w+") as f:
+            f.write(f"{current_run / total_runs}")
 
     with open(f"/stash/tlab/theom_intern/distributed_reservoir_runs/{save_name}/{cpu_name}_hp_search/{cpu_name}_all_hps.txt", "a") as f:
         f.write(f"\n{N}\t{sr}\t{lr}\t{ridge}\t{input_scaling}\t{np.mean(losses)}")
@@ -193,6 +198,14 @@ def objective(dataset, config, *, N, sr, lr, input_scaling, ridge, seed):
 
 
 if args.tune:
+    with open(f"/stash/tlab/theom_intern/distributed_reservoir_runs/{save_name}/{cpu_name}_hp_search/{cpu_name}.config.json", 'r') as f:
+        conf = json.load(f)
+    current_run = 0
+    total_runs = conf["hp_max_evals"] * conf["instances_per_trial"]
+    with open(f"/stash/tlab/theom_intern/distributed_reservoir_runs/{save_name}/{cpu_name}_hp_search/completion.txt", "w+") as f:
+        f.write("0")
+    
+
     best = research(objective, [trd, trt, vad, vat], f"/stash/tlab/theom_intern/distributed_reservoir_runs/{save_name}/{cpu_name}_hp_search/{cpu_name}.config.json")
     with open(f"/stash/tlab/theom_intern/distributed_reservoir_runs/{save_name}/{cpu_name}_hp_search/{cpu_name}_best_hps.txt", "a") as f:
         f.write(str(best))
