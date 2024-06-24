@@ -7,7 +7,8 @@ from tensorflow import keras
 import keras_tuner
 import pickle
 import numpy as np
-from reservoirpy.nodes import Reservoir, Ridge
+from reservoirpy.nodes import Reservoir, Ridge, ESN
+
 
 from util.load_data import prepare_dataset
 
@@ -25,7 +26,8 @@ def create_model(input_scaling, N, sr, lr, ridge, seed):
     #print(f"{len(reservoirs)} Res[]s")
     ridge = Ridge(ridge=ridge)
 
-    esn = reservoir >> ridge
+    #esn = reservoir >> ridge
+    esn = ESN(reservoir=reservoir, readout=ridge, workers=-1)
 
     return esn
 

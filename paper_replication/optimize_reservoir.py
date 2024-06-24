@@ -2,15 +2,17 @@ import sys
 import os
 import argparse
 import json
+import random
 
-import tensorflow
-from tensorflow import keras
-import keras_tuner
+#import tensorflow
+#from tensorflow import keras
+#import keras_tuner
 import pickle
 import numpy as np
 from reservoirpy.nodes import Reservoir, Ridge
 from reservoirpy.hyper import plot_hyperopt_report
 from reservoirpy.hyper import research
+from reservoirpy.observables import mse, rsquare
 
 from util.load_data import prepare_dataset
 from util.reservoir_model import create_model, load_model, store_model
@@ -46,8 +48,8 @@ if goal == "Micro":
     )"""
     trd, trt, vad, vat, ted, tet = prepare_dataset(
         data_path, metadata_path,
-        ["Note", "Exact_L", "Len/BPM", "Micro"],
-        ["Len_M", "Melodic_Charge"],
+        ["Note", "Exact_L", "Len/BPM"],
+        ["Len_M", "Melodic_Charge", "Micro"],
         ["Micro"],
         train_by_piece=True
     )
@@ -61,13 +63,13 @@ elif goal == "Len_P":
 
 
 hyperopt_config = {
-    "exp": "hyperopt-test",    # the experimentation name
-    "hp_max_evals": 84,              # the number of differents sets of parameters hyperopt has to try
+    "exp": f"/stash/tlab/theom_intern/hyper_exp_data/{save_name}",    # the experimentation name
+    "hp_max_evals": 300,              # the number of differents sets of parameters hyperopt has to try
     "hp_method": "random",            # the method used by hyperopt to chose those sets (see below)
     "seed": 42,                       # the random state seed, to ensure reproducibility
     "instances_per_trial": 5,         # how many random ESN will be tried with each sets of parameters
     "hp_space": {                     # what are the ranges of parameters explored
-        "N": ["choice", 20],             # the number of neurons is fixed to 500
+        "N": ["choice", 10, 20, 30, 50, 100, 200, 400, 600, 1000],             # the number of neurons is fixed to 500
         "sr": ["loguniform", 1e-2, 10],   # the spectral radius is log-uniformly distributed between 1e-2 and 10
         "lr": ["loguniform", 1e-3, 1],    # idem with the leaking rate, from 1e-3 to 1
         "input_scaling": ["choice", 1.0], # the input scaling is fixed
@@ -76,13 +78,13 @@ hyperopt_config = {
     }
 }
 
-with open(f"/stash/tlab/theom_intern/hp_model_configs/{hyperopt_config['exp']}.config.json", "w+") as f:
+with open(f"/stash/tlab/theom_intern/hp_model_configs/{save_name}.config.json", "w+") as f:
     json.dump(hyperopt_config, f)
 
 test_data_vel, test_goals_vel = prepare_dataset(
     data_path, metadata_path,
-    ["Note", "Exact_L", "Len/BPM", "Micro"],
-    ["Len_M", "Melodic_Charge"],
+    ["Note", "Exact_L", "Len/BPM"],
+    ["Len_M", "Melodic_Charge", "Micro"],
     ["Micro"],
     test_data_only=True
 )
@@ -94,6 +96,7 @@ def objective(dataset, config, *, N, sr, lr, input_scaling, ridge, seed):
     trd, trt, vad, vat = dataset
 
     trd_keys = list(trd.keys())
+    random.Random(4).shuffle(trd_keys)
     trd = [trd[k] for k in trd_keys]
     trt = [trt[k] for k in trd_keys]
 
@@ -109,59 +112,96 @@ def objective(dataset, config, *, N, sr, lr, input_scaling, ridge, seed):
     trial_seed = seed
 
     losses = []
+    r2s = []
     for i in range(instances):
         model = create_model(input_scaling, N, sr, lr, ridge, trial_seed)
 
-        
         model.fit(trd, trt)
 
         pieces = list(test_data_vel.keys())
         print(len(pieces))
 
-        total_mse = 0
-        no_model_mse = 0
-        total_mse_len = 0
+        loss = 0
+        r2 = 0
 
         for i, piece in enumerate(pieces):
 
             piece_data_vel = test_data_vel[piece]
 
             vad = np.squeeze(piece_data_vel.to_numpy())
+            #vad = piece_data_vel
             piece_len = vad.shape[0]
 
             predictions = model.run(vad, reset=True)
 
 
-            piece_mse = 0
+            """
+            predictions = []
 
-            for j in range(len(predictions)):
-                piece_mse += (predictions[j][0] - test_goals_vel[piece].iloc[j]["Micro"])**2
-                no_model_mse += (test_goals_vel[piece].iloc[j]["Micro"])**2
-                #print(f'{predictions[i][0]}\t{test_goals_vel[piece].iloc[i]["Micro"]}')
-            total_mse += piece_mse
-            total_mse_len += piece_len
-            piece_mse /= piece_len
-            print(f"Piece {i}: {piece_mse}")
-        print(f"All pieces: {total_mse / total_mse_len}")
-        print(f"No model: {no_model_mse / total_mse_len}")
+            for row in range(len(vad)):
+                if goal == "Micro" and row > 0:
+                    vad.loc[row, "-1_Micro"] = float(out) 
+                inputs = vad.loc[row]
+                #if row < 3:
+                #    print(inputs)
 
-        loss = total_mse / total_mse_len
+                inputs = np.squeeze(inputs.to_numpy())
+                #if row < 3:
+                #    print(inputs)
+
+                out = model(inputs)[0]
+                predictions.append(out)
+
+                #de = f"{ted.iloc[row]['Len_M']}"
+                #print(out)
+            """
+
+            a, b = [predictions[j][0] for j in range(len(predictions))], [test_goals_vel[piece].iloc[j]["Micro"] for j in range(len(predictions))]
+            
+            if i == 8:
+                for j in range(len(predictions)):
+                    print(f"{a[j]}\t{b[j]}")
+            
+            loss += mse(a, b)
+            r2 += rsquare(a, b)
+
+            print(f"Piece {i}: {mse(a, b)}")
+
+            #print(f"Piece {i}: {loss}")
+        
+        loss /= len(pieces)
+        r2 /= len(pieces)
+
+        print(f"All pieces: {loss}")
+
         losses.append(loss)
+        r2s.append(r2)
 
         trial_seed += 1
 
     with open(f"/stash/tlab/theom_intern/results_texts/{save_name}.txt", "a") as f:
         f.write(f"\n{N}\t{sr}\t{lr}\t{ridge}\t{input_scaling}\t{np.mean(losses)}")
+
+    if not args.tune:
+        print("hi")
+        pickle.dump(model, open(f"/stash/tlab/theom_intern/res_models/{save_name}.p", "wb" ) )
     
-    return {'loss': np.mean(losses)}
+    return {'loss': np.mean(losses),
+            'r2': np.mean(r2s)}
 
 if args.tune:
-    best = research(objective, [trd, trt, vad, vat], f"/stash/tlab/theom_intern/hp_model_configs/{hyperopt_config['exp']}.config.json")
-    fig = plot_hyperopt_report(hyperopt_config["exp"], ("lr", "sr", "ridge"), metric="loss")
-    fig.savefig("/stash/tlab/theom_intern/figure1.png")
-    fig.show()
+    best = research(objective, [trd, trt, vad, vat], f"/stash/tlab/theom_intern/hp_model_configs/{save_name}.config.json")
+    print(best)
+    fig = plot_hyperopt_report(hyperopt_config["exp"], ("lr", "sr", "ridge"), metric="r2")
+    fig.savefig("/stash/tlab/theom_intern/figure2.png")
+    fig.show(block=True)
+elif not args.no_train:
+    print(objective([trd,trt,vad,vat], {"instances_per_trial":1}, N=1000, sr=0.07966435869333038, lr=0.38264094967620665, ridge=0.0029801797509298408, input_scaling=1.0, seed=1234))
 
 
+
+if True:
+    pass
 elif not args.no_train:
     models = []
     for i in range(1):
@@ -217,7 +257,7 @@ elif not args.no_train:
     print(f"All pieces: {total_mse / total_mse_len}")
     print(f"No model: {no_model_mse / total_mse_len}")
 
-    storeModel(model)
+    # storeModel(model)
 else:
     pass
     # model_to_test = load_model(name)
