@@ -211,7 +211,7 @@ if args.tune:
         f.write(str(best))
     fig = plot_hyperopt_report(f"/stash/tlab/theom_intern/distributed_reservoir_runs/{save_name}", ("lr", "sr", "ridge"), metric="loss")
     fig.savefig("/stash/tlab/theom_intern/figure1.png")
-    fig.show(block=True)
+    #fig.show(block=True)
 elif not args.no_train:
     print(objective([trd,trt,vad,vat], {"instances_per_trial":1}, N=1000, sr=0.07966435869333038, lr=0.38264094967620665, ridge=0.0029801797509298408, input_scaling=1.0, seed=1234))
 

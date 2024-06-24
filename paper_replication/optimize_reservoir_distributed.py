@@ -32,7 +32,7 @@ if goal:
 hyperopt_config = {
 
     "exp": f"/stash/tlab/theom_intern/distributed_reservoir_runs/{save_name}",    # the experimentation name
-    "hp_max_evals": 1,              # the number of differents sets of parameters hyperopt has to try
+    "hp_max_evals": 5,              # the number of differents sets of parameters hyperopt has to try
     "hp_method": "random",            # the method used by hyperopt to chose those sets (see below)
     "seed": 42,                       # the random state seed, to ensure reproducibility
     "instances_per_trial": 2,         # how many characteristics random ESN will be tried with each sets of parameters
@@ -66,8 +66,8 @@ def find_config_exponent_increment(parameter, param_min, param_max, num_cpus):
 def apply_config_ranges(parameter, config_dict, increment, cpu, param_min):
     # returns a config dictionary with a different range of the specificed parameter
     new_config_dict = config_dict.copy()
-    new_config_dict['hp_space'][parameter][2] = 10**(param_min + (cpu + 1)*increment[parameter])
-    new_config_dict['hp_space'][parameter][1] = 10**(param_min + (cpu)*increment[parameter])
+    new_config_dict['hp_space'][parameter][2] = 10**(math.log10(param_min) + (cpu + 1)*increment[parameter])
+    new_config_dict['hp_space'][parameter][1] = 10**(math.log10(param_min) + (cpu)*increment[parameter])
     new_config_dict['cpu'] = cpu
     new_config_dict['hp_space']['seed'][1] += cpu
     
@@ -182,4 +182,4 @@ def hp_optimization_parallelized(hp_optimization_file_path, tmux_session_name, t
     run_file_on_all_cpus(cpus, hp_optimization_file_path, tmux_session_name, terminal_args)
 
 
-hp_optimization_parallelized('~/music_phrasing/paper_replication/optimize_reservoir.py' if os.getlogin() == "brianl_intern" else 'optimize_reservoir.py', f"theobrian_{save_name}", args)
+hp_optimization_parallelized('~/Downloads/music_phrasing/paper_replication/optimize_reservoir.py' if os.getlogin() == "brianl_intern" else 'optimize_reservoir.py', f"theobrian_{save_name}", args)
