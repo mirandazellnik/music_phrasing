@@ -4,6 +4,7 @@ import subprocess
 import argparse
 import copy
 import re
+import math
 import time
 
 
@@ -29,15 +30,16 @@ if goal:
 
 
 hyperopt_config = {
-    "exp": save_name,    # the experimentation name
-    "hp_max_evals": 5,              # the number of differents sets of parameters hyperopt has to try
+
+    "exp": f"/stash/tlab/theom_intern/distributed_reservoir_runs/{save_name}",    # the experimentation name
+    "hp_max_evals": 1,              # the number of differents sets of parameters hyperopt has to try
     "hp_method": "random",            # the method used by hyperopt to chose those sets (see below)
     "seed": 42,                       # the random state seed, to ensure reproducibility
-    "instances_per_trial": 2,         # how many random ESN will be tried with each sets of parameters
+    "instances_per_trial": 2,         # how many characteristics random ESN will be tried with each sets of parameters
     "hp_space": {                     # what are the ranges of parameters explored
-        "N": ["choice", 500],             # the number of neurons is fixed to 500
+        "N": ["choice", 5],             # the number of neurons is fixed to 500
         "sr": ["loguniform", 1e-2, 10],   # the spectral radius is log-uniformly distributed between 1e-2 and 10
-        "lr": ["loguniform", 1e-3, 1],    # idem with the leaking rate, from 1e-3 to 1
+        "lr": ["loguniform", .1, 1],    # idem with the leaking rate, from 1e-3 to 1
         "input_scaling": ["choice", 1.0], # the input scaling is fixed
         "ridge": ["loguniform", 1e-8, 1e1],        # and so is the regularization parameter.
         "seed": ["choice", 1234]          # an other random seed for the ESN initialization
@@ -54,18 +56,18 @@ except FileExistsError:
     pass
 
 
-def find_config_increments(parameter, config_dict, num_cpus):
+def find_config_exponent_increment(parameter, param_min, param_max, num_cpus):
     # returns a dictionary with the key being the name of the variable parameter and the value being the range of the parameter divided by the number of cpus
-    config_increments = {}
-    config_increments[parameter] = (config_dict['hp_space'][parameter][2] - config_dict['hp_space'][parameter][1]) / num_cpus
+    config_exponent_increment = {}
+    config_exponent_increment[parameter] = math.log10(param_max / param_min) / num_cpus
     
-    return config_increments
+    return config_exponent_increment
 
-def apply_config_ranges(parameter, config_dict, increments, cpu):
+def apply_config_ranges(parameter, config_dict, increment, cpu, param_min):
     # returns a config dictionary with a different range of the specificed parameter
     new_config_dict = config_dict.copy()
-    new_config_dict['hp_space'][parameter][2] = (cpu + 1) * increments[parameter]
-    new_config_dict['hp_space'][parameter][1] = (cpu) * increments[parameter]
+    new_config_dict['hp_space'][parameter][2] = 10**(param_min + (cpu + 1)*increment[parameter])
+    new_config_dict['hp_space'][parameter][1] = 10**(param_min + (cpu)*increment[parameter])
     new_config_dict['cpu'] = cpu
     new_config_dict['hp_space']['seed'][1] += cpu
     
@@ -74,11 +76,13 @@ def apply_config_ranges(parameter, config_dict, increments, cpu):
 def create_configs(num_cpus, base_config_path, variable_parameter): # variable_parameter is the parameter that differs in range 
     # returns a list of config dictionaries with the range of the parameter argument different but every other parameter the same
     base_config = json.load(open(base_config_path))
-    config_increments = find_config_increments(variable_parameter, base_config, num_cpus)
+    param_min = base_config['hp_space'][variable_parameter][1]
+    param_max = base_config['hp_space'][variable_parameter][2]
+    config_increment = find_config_exponent_increment(variable_parameter, param_min, param_max, num_cpus)
 
     configs = []
     for cpu in range(num_cpus):
-        config = apply_config_ranges(variable_parameter, base_config, config_increments, cpu)
+        config = apply_config_ranges(variable_parameter, base_config, config_increment, cpu, param_min)
         configs.append(copy.deepcopy(config))
     
     return configs
