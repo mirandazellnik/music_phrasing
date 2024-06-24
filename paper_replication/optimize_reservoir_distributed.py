@@ -4,6 +4,7 @@ import subprocess
 import argparse
 import copy
 import re
+import time
 
 
 argParser = argparse.ArgumentParser()
@@ -29,10 +30,10 @@ if goal:
 
 hyperopt_config = {
     "exp": save_name,    # the experimentation name
-    "hp_max_evals": 123,              # the number of differents sets of parameters hyperopt has to try
+    "hp_max_evals": 5,              # the number of differents sets of parameters hyperopt has to try
     "hp_method": "random",            # the method used by hyperopt to chose those sets (see below)
     "seed": 42,                       # the random state seed, to ensure reproducibility
-    "instances_per_trial": 10,         # how many random ESN will be tried with each sets of parameters
+    "instances_per_trial": 2,         # how many random ESN will be tried with each sets of parameters
     "hp_space": {                     # what are the ranges of parameters explored
         "N": ["choice", 500],             # the number of neurons is fixed to 500
         "sr": ["loguniform", 1e-2, 10],   # the spectral radius is log-uniformly distributed between 1e-2 and 10
@@ -66,7 +67,7 @@ def apply_config_ranges(parameter, config_dict, increments, cpu):
     new_config_dict['hp_space'][parameter][2] = (cpu + 1) * increments[parameter]
     new_config_dict['hp_space'][parameter][1] = (cpu) * increments[parameter]
     new_config_dict['cpu'] = cpu
-    new_config_dict['hp_space']['seed'] += cpu
+    new_config_dict['hp_space']['seed'][1] += cpu
     
     return new_config_dict
 
@@ -96,7 +97,7 @@ def gather_cpus(cpus_to_search):
 def correlate_cpus_and_configs(variable_parameter):
     # gets a list of unused cpus, creates different config files for each, then returns dictionary of each server and their
     # config file
-    cpus_to_search = ['arve', 'birs', 'doubs', 'inn', 'kander', 'linth', 'lonza', 'orbe', 'reuss', 'rhine', 'rhone', 'saane',
+    cpus_to_search = ['rhone', 'saane',
                        'thur', 'ticino']
     cpus = gather_cpus(cpus_to_search)
     #cpus = ['arve', 'birs', 'inn', 'kander']
@@ -125,15 +126,36 @@ def run_file_on_cpu(cpu_name, file_path, session_name, terminal_args): # file pa
     # does not return anything
     subprocess.run('tmux new-window -S -n ' + cpu_name + '_window', shell=True)
     
+    commands_t = ["cd ~/music_phrasing/tests/word_based",
+                "python3 -m pipenv shell",
+                # ". /u/theom_intern/.local/share/virtualenvs/word_based-6MIe0CKq/bin/activate",
+                "conda activate tf",
+                "cd ../../paper_replication/"]
+    commands_b = ["conda activate music_phrasing_env"]
+
+    if os.getlogin() == "theom_intern":
+        commands = commands_t
+    elif os.getlogin() == "brianl_intern":
+        commands = commands_b
+    else:
+        raise ZeroDivisionError
+
+
     ssh_into_cpu_command = f'tmux send-keys -t {session_name} -l "ssh {cpu_name}"'
-    set_up_conda_env_command = f'tmux send-keys -t {session_name} -l "conda activate music_phrasing_env"'
+    #set_up_conda_env_command = f'tmux send-keys -t {session_name} -l "conda activate music_phrasing_env"'
     run_file_command = f'tmux send-keys -t {session_name} -l "python3 {file_path} {terminal_args.name} {cpu_name} {a(no_train_arg)} {a(tune_arg)} {a(goal)}"'
     enter_command = f'tmux send-keys -t {session_name} "Enter"'
      
     subprocess.run(ssh_into_cpu_command, shell=True)
     subprocess.run(enter_command, shell=True)
-    subprocess.run(set_up_conda_env_command, shell=True)
-    subprocess.run(enter_command, shell=True)
+    time.sleep(1)
+    for command in commands:
+        subprocess.run(f'tmux send-keys -t {session_name} -l "{command}"', shell=True)
+        subprocess.run(enter_command, shell=True)
+        print(f"{session_name}: {command}")
+        time.sleep(.5)
+        if command == "python3 -m pipenv shell":
+            time.sleep(4)
     subprocess.run(run_file_command, shell=True)
     subprocess.run(enter_command, shell=True)
 
@@ -143,6 +165,7 @@ def run_file_on_all_cpus(cpus, hp_optimization_file_path, tmux_session_name, ter
     subprocess.run(initialize_session_command, shell=True)
     for cpu in list(cpus):
         run_file_on_cpu(cpu, hp_optimization_file_path, tmux_session_name, terminal_args)
+        time.sleep(2)
 
 
 def hp_optimization_parallelized(hp_optimization_file_path, tmux_session_name, terminal_args): # terminal args is a Namespace
@@ -155,4 +178,4 @@ def hp_optimization_parallelized(hp_optimization_file_path, tmux_session_name, t
     run_file_on_all_cpus(cpus, hp_optimization_file_path, tmux_session_name, terminal_args)
 
 
-hp_optimization_parallelized('~/Downloads/music_phrasing/paper_replication/optimize_reservoir.py', 'test_session_2', args)
+hp_optimization_parallelized('~/music_phrasing/paper_replication/optimize_reservoir.py' if os.getlogin() == "brianl_intern" else 'optimize_reservoir.py', f"theobrian_{save_name}", args)
