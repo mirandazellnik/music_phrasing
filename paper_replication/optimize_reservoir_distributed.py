@@ -101,7 +101,7 @@ def gather_cpus(cpus_to_search):
 def correlate_cpus_and_configs(variable_parameter):
     # gets a list of unused cpus, creates different config files for each, then returns dictionary of each server and their
     # config file
-    cpus_to_search = ['rhone', 'saane',
+    cpus_to_search = ['arve', 'birs', 'doubs', 'inn', 'kander', 'linth', 'lonza', 'orbe', 'reuss', 'rhine', 'rhone', 'saane',
                        'thur', 'ticino']
     cpus = gather_cpus(cpus_to_search)
     #cpus = ['arve', 'birs', 'inn', 'kander']
