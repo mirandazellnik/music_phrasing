@@ -6,7 +6,10 @@ import copy
 import re
 import math
 import time
+import random
+import sys
 
+import progressbar
 
 argParser = argparse.ArgumentParser()
 argParser.add_argument("name", nargs="?", help="Name of this run, for logging, model saving, etc.", type=str)
@@ -32,14 +35,14 @@ if goal:
 hyperopt_config = {
 
     "exp": f"/stash/tlab/theom_intern/distributed_reservoir_runs/{save_name}",    # the experimentation name
-    "hp_max_evals": 5,              # the number of differents sets of parameters hyperopt has to try
+    "hp_max_evals": 176,              # the number of differents sets of parameters hyperopt has to try
     "hp_method": "random",            # the method used by hyperopt to chose those sets (see below)
     "seed": 42,                       # the random state seed, to ensure reproducibility
-    "instances_per_trial": 2,         # how many characteristics random ESN will be tried with each sets of parameters
+    "instances_per_trial": 5,         # how many characteristics random ESN will be tried with each sets of parameters
     "hp_space": {                     # what are the ranges of parameters explored
-        "N": ["choice", 5],             # the number of neurons is fixed to 500
+        "N": ["choice", 1000],             # the number of neurons is fixed to 500
         "sr": ["loguniform", 1e-2, 10],   # the spectral radius is log-uniformly distributed between 1e-2 and 10
-        "lr": ["loguniform", .1, 1],    # idem with the leaking rate, from 1e-3 to 1
+        "lr": ["loguniform", 1e-3, 1],    # idem with the leaking rate, from 1e-3 to 1
         "input_scaling": ["choice", 1.0], # the input scaling is fixed
         "ridge": ["loguniform", 1e-8, 1e1],        # and so is the regularization parameter.
         "seed": ["choice", 1234]          # an other random seed for the ESN initialization
@@ -149,14 +152,14 @@ def run_file_on_cpu(cpu_name, file_path, session_name, terminal_args): # file pa
     #set_up_conda_env_command = f'tmux send-keys -t {session_name} -l "conda activate music_phrasing_env"'
     run_file_command = f'tmux send-keys -t {session_name} -l "python3 {file_path} {terminal_args.name} {cpu_name} {a(no_train_arg)} {a(tune_arg)} {a(goal)}"'
     enter_command = f'tmux send-keys -t {session_name} "Enter"'
-     
+    
+    print(f"spinning up {cpu_name}...")
     subprocess.run(ssh_into_cpu_command, shell=True)
     subprocess.run(enter_command, shell=True)
     time.sleep(1)
     for command in commands:
         subprocess.run(f'tmux send-keys -t {session_name} -l "{command}"', shell=True)
         subprocess.run(enter_command, shell=True)
-        print(f"{session_name}: {command}")
         time.sleep(.5)
         if command == "python3 -m pipenv shell":
             time.sleep(4)
@@ -180,6 +183,57 @@ def hp_optimization_parallelized(hp_optimization_file_path, tmux_session_name, t
     cpus = cpus_and_configs.keys()
 
     run_file_on_all_cpus(cpus, hp_optimization_file_path, tmux_session_name, terminal_args)
+    return list(cpus)
 
 
-hp_optimization_parallelized('~/Downloads/music_phrasing/paper_replication/optimize_reservoir.py' if os.getlogin() == "brianl_intern" else 'optimize_reservoir.py', f"theobrian_{save_name}", args)
+cpus = hp_optimization_parallelized('~/Downloads/music_phrasing/paper_replication/optimize_reservoir.py' if os.getlogin() == "brianl_intern" else 'optimize_reservoir.py', f"theobrian_{save_name}", args)
+
+def multiple_bars_line_offset_example():
+    N = hyperopt_config["hp_max_evals"] * hyperopt_config["instances_per_trial"]
+    print(cpus)
+
+    for _ in range(len(cpus)+1):
+        print()
+
+    bars = {cpu: 
+        progressbar.ProgressBar(
+            max_value=N,
+            # We add 1 to the line offset to account for the `print_fd`
+            line_offset=i+1,
+            max_error=False,
+            prefix=f'{cpu:6}: '
+        )
+        for i, cpu in enumerate(cpus)
+    }
+    # Create a file descriptor for regular printing as well
+    print_fd = progressbar.LineOffsetStreamWrapper(lines=0, stream=sys.stdout)
+    assert print_fd
+
+    done = False
+
+    # The progress bar updates, normally you would do something useful here
+    while not done:
+        done = True
+        time.sleep(0.005)
+
+        for cpu in cpus:
+            try:
+                with open(f"/stash/tlab/theom_intern/distributed_reservoir_runs/{save_name}/{cpu}_hp_search/completion.txt", "r") as f:                
+                    x = f.readlines()
+                    while not x:
+                        time.sleep(.005)
+                        x = f.readlines()
+                    completion = int(x[0])
+            except FileNotFoundError:
+                completion = 0
+            bars[cpu].update(completion)
+            if completion < N:
+                done = False
+
+    # Cleanup the bars
+    for bar in bars.values():
+        bar.finish()
+        # Add a newline to make sure the next print starts on a new line
+        print()
+
+multiple_bars_line_offset_example()

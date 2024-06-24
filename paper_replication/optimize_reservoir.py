@@ -37,6 +37,9 @@ if not goal:
     goal = "Micro"
 assert goal in ["Micro", "Len_P"]
 
+with open(f"/stash/tlab/theom_intern/distributed_reservoir_runs/{save_name}/{cpu_name}_hp_search/completion.txt", "w+") as f:
+    f.write("0")
+
 # Micro data (current and -1): Note, Exact_Lower, Exact_Higher, Motion
 # Micro data (current only): Len_M, W.5, B.1, B.5, A.1, A.5, W.5
 # Macro data: Time, B1, B2, B4, W.5
@@ -184,7 +187,7 @@ def objective(dataset, config, *, N, sr, lr, input_scaling, ridge, seed):
         current_run += 1
 
         with open(f"/stash/tlab/theom_intern/distributed_reservoir_runs/{save_name}/{cpu_name}_hp_search/completion.txt", "w+") as f:
-            f.write(f"{current_run / total_runs}")
+            f.write(f"{current_run}")
 
     with open(f"/stash/tlab/theom_intern/distributed_reservoir_runs/{save_name}/{cpu_name}_hp_search/{cpu_name}_all_hps.txt", "a") as f:
         f.write(f"\n{N}\t{sr}\t{lr}\t{ridge}\t{input_scaling}\t{np.mean(losses)}")
@@ -201,9 +204,6 @@ if args.tune:
     with open(f"/stash/tlab/theom_intern/distributed_reservoir_runs/{save_name}/{cpu_name}_hp_search/{cpu_name}.config.json", 'r') as f:
         conf = json.load(f)
     current_run = 0
-    total_runs = conf["hp_max_evals"] * conf["instances_per_trial"]
-    with open(f"/stash/tlab/theom_intern/distributed_reservoir_runs/{save_name}/{cpu_name}_hp_search/completion.txt", "w+") as f:
-        f.write("0")
     
 
     best = research(objective, [trd, trt, vad, vat], f"/stash/tlab/theom_intern/distributed_reservoir_runs/{save_name}/{cpu_name}_hp_search/{cpu_name}.config.json")
