@@ -69,7 +69,7 @@ def apply_config_ranges(parameter, config_dict, increment, cpu, param_min):
     new_config_dict['hp_space'][parameter][2] = 10**(math.log10(param_min) + (cpu + 1)*increment[parameter])
     new_config_dict['hp_space'][parameter][1] = 10**(math.log10(param_min) + (cpu)*increment[parameter])
     new_config_dict['cpu'] = cpu
-    new_config_dict['hp_space']['seed'][1] += cpu
+    new_config_dict['seed'] += cpu
     
     return new_config_dict
 
