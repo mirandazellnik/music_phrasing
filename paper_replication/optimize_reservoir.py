@@ -141,8 +141,7 @@ if args.tune:
     best = research(objective, [trd, trt, vad, vat], f"/stash/tlab/theom_intern/distributed_reservoir_runs/{save_name}/{cpu_name}_hp_search/{cpu_name}.config.json")
     with open(f"/stash/tlab/theom_intern/distributed_reservoir_runs/{save_name}/{cpu_name}_hp_search/{cpu_name}_best_hps.txt", "a") as f:
         f.write(str(best))
-    os.mkdir(f"/stash/tlab/theom_intern/distributed_reservoir_runs/{save_name}/{cpu_name}_hp_search/results")
-    fig = plot_hyperopt_report(f"/stash/tlab/theom_intern/distributed_reservoir_runs/{save_name}/{cpu_name}_hp_search", ("lr", "sr", "ridge"), metric="loss")
+    fig = plot_hyperopt_report(f"/stash/tlab/theom_intern/distributed_reservoir_runs/{save_name}", ("lr", "sr", "ridge"), metric="loss")
     fig.savefig("/stash/tlab/theom_intern/figure1.png")
     fig.show()
 
