@@ -37,8 +37,9 @@ if not goal:
     goal = "Micro"
 assert goal in ["Micro", "Len_P"]
 
-with open(f"/stash/tlab/theom_intern/distributed_reservoir_runs/{save_name}/{cpu_name}_hp_search/completion.txt", "w+") as f:
-    f.write("0")
+if args.tune:
+    with open(f"/stash/tlab/theom_intern/distributed_reservoir_runs/{save_name}/{cpu_name}_hp_search/completion.txt", "w+") as f:
+        f.write("0")
 
 # Micro data (current and -1): Note, Exact_Lower, Exact_Higher, Motion
 # Micro data (current only): Len_M, W.5, B.1, B.5, A.1, A.5, W.5
@@ -169,7 +170,7 @@ def objective(dataset, config, *, N, sr, lr, input_scaling, ridge, seed):
                     print(f"{a[j]}\t{b[j]}")
             
             loss += mse(a, b)
-            r2 += rsquare(a, b)
+            r2 += rsquare(b, a)
 
             print(f"Piece {i}: {mse(a, b)}")
 
@@ -213,9 +214,7 @@ if args.tune:
     fig.savefig("/stash/tlab/theom_intern/figure1.png")
     #fig.show(block=True)
 elif not args.no_train:
-    print(objective([trd,trt,vad,vat], {"instances_per_trial":1}, N=1000, sr=0.07966435869333038, lr=0.38264094967620665, ridge=0.0029801797509298408, input_scaling=1.0, seed=1234))
-
-
+    print(objective([trd,trt,vad,vat], {"instances_per_trial":5}, N=1000, sr=8.499051628830102, lr=0.007065803302419594, ridge=1.4879676895175873e-06, input_scaling=1.0, seed=1234))
 
 if True:
     pass
