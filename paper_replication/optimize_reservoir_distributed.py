@@ -35,14 +35,14 @@ if goal:
 hyperopt_config = {
 
     "exp": f"/stash/tlab/theom_intern/distributed_reservoir_runs/{save_name}",    # the experimentation name
-    "hp_max_evals": 176,              # the number of differents sets of parameters hyperopt has to try
+    "hp_max_evals": 200,              # the number of differents sets of parameters hyperopt has to try
     "hp_method": "random",            # the method used by hyperopt to chose those sets (see below)
     "seed": 42,                       # the random state seed, to ensure reproducibility
     "instances_per_trial": 5,         # how many characteristics random ESN will be tried with each sets of parameters
     "hp_space": {                     # what are the ranges of parameters explored
         "N": ["choice", 1000],             # the number of neurons is fixed to 500
-        "sr": ["loguniform", 1e-2, 10],   # the spectral radius is log-uniformly distributed between 1e-2 and 10
-        "lr": ["loguniform", 1e-3, 1],    # idem with the leaking rate, from 1e-3 to 1
+        "sr": ["loguniform", 1e-4, 10],   # the spectral radius is log-uniformly distributed between 1e-2 and 10
+        "lr": ["loguniform", 1e-5, 1],    # idem with the leaking rate, from 1e-3 to 1
         "input_scaling": ["choice", 1.0], # the input scaling is fixed
         "ridge": ["loguniform", 1e-8, 1e1],        # and so is the regularization parameter.
         "seed": ["choice", 1234]          # an other random seed for the ESN initialization
@@ -104,7 +104,9 @@ def gather_cpus(cpus_to_search):
 def correlate_cpus_and_configs(variable_parameter):
     # gets a list of unused cpus, creates different config files for each, then returns dictionary of each server and their
     # config file
-    cpus_to_search = ['arve', 'birs', 'doubs', 'inn', 'kander', 'linth', 'lonza', 'orbe', 'reuss', 'rhine', 'rhone', 'saane',
+    cpus_to_search = [
+    #    'arve',
+                      'birs', 'doubs', 'inn', 'kander', 'linth', 'lonza', 'orbe', 'reuss', 'rhine', 'rhone', 'saane',
                        'thur', 'ticino']
     cpus = gather_cpus(cpus_to_search)
     #cpus = ['arve', 'birs', 'inn', 'kander']
@@ -211,12 +213,16 @@ def multiple_bars_line_offset_example():
 
     done = False
 
+    statuses = {cpu: False for cpu in cpus}
+
     # The progress bar updates, normally you would do something useful here
     while not done:
         done = True
         time.sleep(0.005)
 
         for cpu in cpus:
+            if statuses[cpu] == True:
+                continue
             try:
                 with open(f"/stash/tlab/theom_intern/distributed_reservoir_runs/{save_name}/{cpu}_hp_search/completion.txt", "r") as f:                
                     x = f.readlines()
@@ -229,10 +235,13 @@ def multiple_bars_line_offset_example():
             bars[cpu].update(completion)
             if completion < N:
                 done = False
+            else:
+                bars[cpu].finish()
+                statuses[cpu] = True
 
     # Cleanup the bars
     for bar in bars.values():
-        bar.finish()
+        #bar.finish()
         # Add a newline to make sure the next print starts on a new line
         print()
 
