@@ -185,16 +185,18 @@ def objective(dataset, config, *, N, sr, lr, input_scaling, ridge, seed):
         r2s.append(r2)
 
         trial_seed += 1
-        current_run += 1
 
-        with open(f"/stash/tlab/theom_intern/distributed_reservoir_runs/{save_name}/{cpu_name}_hp_search/completion.txt", "w+") as f:
-            f.write(f"{current_run}")
+        if args.tune:
+            current_run += 1
 
-    with open(f"/stash/tlab/theom_intern/distributed_reservoir_runs/{save_name}/{cpu_name}_hp_search/{cpu_name}_all_hps.txt", "a") as f:
-        f.write(f"\n{N}\t{sr}\t{lr}\t{ridge}\t{input_scaling}\t{np.mean(losses)}")
+            with open(f"/stash/tlab/theom_intern/distributed_reservoir_runs/{save_name}/{cpu_name}_hp_search/completion.txt", "w+") as f:
+                f.write(f"{current_run}")
 
-    if not args.tune:
-        print("hi")
+    if args.tune:
+        with open(f"/stash/tlab/theom_intern/distributed_reservoir_runs/{save_name}/{cpu_name}_hp_search/{cpu_name}_all_hps.txt", "a") as f:
+            f.write(f"\n{N}\t{sr}\t{lr}\t{ridge}\t{input_scaling}\t{np.mean(losses)}")
+    else:
+        print("Saving model...")
         pickle.dump(model, open(f"/stash/tlab/theom_intern/res_models/{save_name}.p", "wb" ) )
     
     return {'loss': np.mean(losses),
@@ -214,8 +216,7 @@ if args.tune:
     fig.savefig("/stash/tlab/theom_intern/figure1.png")
     #fig.show(block=True)
 elif not args.no_train:
-    print(objective([trd,trt,vad,vat], {"instances_per_trial":5}, N=1000, sr=8.499051628830102, lr=0.007065803302419594, ridge=1.4879676895175873e-06, input_scaling=1.0, seed=1234))
-
+    print(objective([trd,trt,vad,vat], {"instances_per_trial":1}, N=1000, sr=1.028798288646009, lr=0.4809398365604778, ridge=4.99994379801419, input_scaling=1.0, seed=1234))
 if True:
     pass
 elif not args.no_train:
