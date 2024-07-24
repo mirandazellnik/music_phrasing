@@ -59,7 +59,8 @@ if goal == "Micro":
         ["Note", "Exact_L", "Len/BPM"],
         ["Len_M", "Melodic_Charge", "Micro"],
         ["Micro"],
-        train_by_piece=True
+        train_by_piece=True,
+        sample_repeats=10
     )
 elif goal == "Len_P":
     trd, trt, vad, vat, ted, tet = prepare_dataset(
@@ -105,7 +106,8 @@ test_data_vel, test_goals_vel = prepare_dataset(
     ["Note", "Exact_L", "Len/BPM"],
     ["Len_M", "Melodic_Charge", "Micro"],
     ["Micro"],
-    test_data_only=True
+    test_data_only=True,
+    sample_repeats=10
 )
 
 
@@ -275,7 +277,9 @@ if args.tune:
     fig.savefig(f"/stash/tlab/theom_intern/distributed_reservoir_runs/{save_name}/figure1.png")
     fig.show()
 elif not args.no_train:
-    print(objective([trd,trt,vad,vat], {"instances_per_trial":2}, N=20, sr=8.10276339770031 , lr=0.01699826361489754, ridge=0.04191642154626806, rc_connectivity=0.14345098249172025, input_connectivity=0.27503492662184154, fb_connectivity=0.0011476015577360538, input_scaling=1.0, seed=1234))
+    #print(objective([trd,trt,vad,vat], {"instances_per_trial":2}, N=20, sr=8.10276339770031 , lr=0.01699826361489754, ridge=0.04191642154626806, rc_connectivity=0.14345098249172025, input_connectivity=0.27503492662184154, fb_connectivity=0.0011476015577360538, input_scaling=1.0, seed=1234))
+    #print(objective([trd,trt,vad,vat], {"instances_per_trial":1}, N=1000, sr=1.028798288646009, lr=0.4809398365604778, ridge=4.99994379801419, input_scaling=1.0, seed=1234))
+    print(objective([trd,trt,vad,vat], {"instances_per_trial":1}, N=1000, sr=0.6707490962802083, lr=0.31410658582869727, ridge=0.10645643230555085, input_scaling=1.0, seed=1234))
 if True:
     pass
 elif not args.no_train:

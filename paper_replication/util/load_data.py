@@ -5,7 +5,8 @@ import copy
 
 # handles getting the features from the processed/aligned data along with extract_features, where the processed data is made in
 # process_midi
-def prepare_dataset(data_path, metadata_path, columns_with_hist, columns_without_hist, goal_columns, test_data_only = False, train_by_piece = False):
+def prepare_dataset(data_path, metadata_path, columns_with_hist, columns_without_hist, goal_columns, test_data_only = False, train_by_piece = False, sample_repeats = 1):
+
     data = json.load(open(data_path))
     df = pandas.read_csv(metadata_path)
 
@@ -18,6 +19,9 @@ def prepare_dataset(data_path, metadata_path, columns_with_hist, columns_without
         md = df.loc[df['midi_performance'] == perf_name].values
         if f"{md[0][0]} {md[0][1]}" == "Mozart Fantasie_475":
             continue # Skip this piece, it's out of place
+
+        if md[0][0] != "Bach":
+            continue # Skip, not Bach
 
         if md[0][0] not in composers_pieces:
             composers_pieces[md[0][0]] = {}
@@ -68,8 +72,11 @@ def prepare_dataset(data_path, metadata_path, columns_with_hist, columns_without
         md = df.loc[df['midi_performance'] == perf_name].values
         if f"{md[0][0]} {md[0][1]}" == "Mozart Fantasie_475":
             continue # Skip this piece, it's out of place
+
+        if md[0][0] != "Bach":
+            continue # Skip, not Bach
         
-        data_wanted = {k: v for k, v in data[perf_name].items() if k in columns}
+        data_wanted = {k: [w for w in v for _ in range(sample_repeats)] for k, v in data[perf_name].items() if k in columns}
         
         if f"{md[0][0]} {md[0][1]}" in train_pieces:
             train_samples_by_piece[perf_name] = copy.deepcopy(data_wanted)

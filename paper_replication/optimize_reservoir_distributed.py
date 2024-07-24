@@ -100,6 +100,8 @@ def gather_cpus(cpus_to_search):
         cpu_data = subprocess.run('ssh ' + cpu + ' w', shell=True, text=True, capture_output=True).stdout
         #print(cpu_data)
         load_avg_string = re.search(r' load average: \d+.\d+', cpu_data)
+        if not load_avg_string:
+            print(f"{cpu}: {cpu_data}")
         load_avg = float(load_avg_string.group().split()[2])
         if load_avg <= 3.0:
             cpus.append(cpu)

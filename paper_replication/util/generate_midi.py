@@ -33,7 +33,7 @@ def apply_outputs(path_to_txt, path_to_save, velocities, lengths):
     for i, line in enumerate(lines):
         note, offset, _, _, _, _, length, _ = line.split('\t')
         note, offset, length = int(note), float(offset), float(length)
-        events.append([offset, note, round(float(velocities[i])*3) + 65])
+        events.append([offset, note, min(max(round(float(velocities[i])*1.7) + 65, 1),127)])
         events.append([offset + float(lengths[i]), note, 0])
     
     events.sort(key = lambda x: x[0])
@@ -41,7 +41,11 @@ def apply_outputs(path_to_txt, path_to_save, velocities, lengths):
     offset = 0
     for event in events:
         time = event[0] - offset
-        track.append(mido.Message(type="note_on", channel=0, note=event[1], velocity=event[2], time=round(mf.ticks_per_beat * time * 2)))
+        try:
+            track.append(mido.Message(type="note_on", channel=0, note=event[1], velocity=event[2], time=round(mf.ticks_per_beat * time * 2)))
+        except ValueError:
+            print(event)
+            raise ValueError
         offset = event[0]
     
     mf.save(path_to_save)
