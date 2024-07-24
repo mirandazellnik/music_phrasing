@@ -41,8 +41,8 @@ hyperopt_config = {
     "instances_per_trial": 5,         # how many characteristics random ESN will be tried with each sets of parameters
     "hp_space": {                     # what are the ranges of parameters explored
         "N": ["choice", 1000],             # the number of neurons is fixed to 500
-        "sr": ["loguniform", 1e-4, 10],   # the spectral radius is log-uniformly distributed between 1e-2 and 10
-        "lr": ["loguniform", 1e-5, 1],    # idem with the leaking rate, from 1e-3 to 1
+        "sr": ["loguniform", 1e-3, 10],   # the spectral radius is log-uniformly distributed between 1e-2 and 10
+        "lr": ["loguniform", 1e-2, 1],    # idem with the leaking rate, from 1e-3 to 1
         "input_scaling": ["choice", 1.0], # the input scaling is fixed
         "ridge": ["loguniform", 1e-8, 1e1],        # and so is the regularization parameter.
         "seed": ["choice", 1234]          # an other random seed for the ESN initialization
@@ -95,6 +95,8 @@ def gather_cpus(cpus_to_search):
     for cpu in cpus_to_search:
         cpu_data = subprocess.run('ssh ' + cpu + ' w', shell=True, text=True, capture_output=True).stdout
         load_avg_string = re.search(r' load average: \d+.\d+', cpu_data)
+        if not load_avg_string:
+            print(f"{cpu}: {cpu_data}")
         load_avg = float(load_avg_string.group().split()[2])
         if load_avg <= 3.0:
             cpus.append(cpu)
@@ -106,7 +108,7 @@ def correlate_cpus_and_configs(variable_parameter):
     # config file
     cpus_to_search = [
     #    'arve',
-                      'birs', 'doubs', 'inn', 'kander', 'linth', 'lonza', 'orbe', 'reuss', 'rhine', 'rhone', 'saane',
+                      'birs', 'inn', 'kander', 'linth', 'lonza', 'orbe', 'reuss', 'rhine', 'rhone', 'saane',
                        'thur', 'ticino']
     cpus = gather_cpus(cpus_to_search)
     #cpus = ['arve', 'birs', 'inn', 'kander']

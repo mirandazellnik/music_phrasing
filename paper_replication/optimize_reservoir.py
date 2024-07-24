@@ -58,7 +58,8 @@ if goal == "Micro":
         ["Note", "Exact_L", "Len/BPM"],
         ["Len_M", "Melodic_Charge", "Micro"],
         ["Micro"],
-        train_by_piece=True
+        train_by_piece=True,
+        sample_repeats=10
     )
 elif goal == "Len_P":
     trd, trt, vad, vat, ted, tet = prepare_dataset(
@@ -94,7 +95,8 @@ test_data_vel, test_goals_vel = prepare_dataset(
     ["Note", "Exact_L", "Len/BPM"],
     ["Len_M", "Melodic_Charge", "Micro"],
     ["Micro"],
-    test_data_only=True
+    test_data_only=True,
+    sample_repeats=10
 )
 
 def objective(dataset, config, *, N, sr, lr, input_scaling, ridge, seed):
@@ -216,7 +218,8 @@ if args.tune:
     fig.savefig("/stash/tlab/theom_intern/figure1.png")
     #fig.show(block=True)
 elif not args.no_train:
-    print(objective([trd,trt,vad,vat], {"instances_per_trial":1}, N=1000, sr=1.028798288646009, lr=0.4809398365604778, ridge=4.99994379801419, input_scaling=1.0, seed=1234))
+    #print(objective([trd,trt,vad,vat], {"instances_per_trial":1}, N=1000, sr=1.028798288646009, lr=0.4809398365604778, ridge=4.99994379801419, input_scaling=1.0, seed=1234))
+    print(objective([trd,trt,vad,vat], {"instances_per_trial":1}, N=1000, sr=0.6707490962802083, lr=0.31410658582869727, ridge=0.10645643230555085, input_scaling=1.0, seed=1234))
 if True:
     pass
 elif not args.no_train:
