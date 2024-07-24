@@ -14,28 +14,35 @@ METADATA = pandas.read_csv(os.path.join(ASAP_PATH, "metadata.csv"))
 ASAP_ANNOTATIONS = json.load(open(os.path.join(ASAP_PATH, "asap_annotations.json")))
 
 
-def parse_midi(path=None, id=None):
+def parse_midi(path=None, id=None): # parses midi for one performance
     if path:
 
         if not ASAP_ANNOTATIONS[path]["score_and_performance_aligned"]:
             
             return None, None, None, None
 
+
+        # defining the paths to the performance and its annotations
         perf_path = os.path.join(ASAP_PATH, path)
         perf_ann_path = os.path.splitext(perf_path)[0]+'_annotations.txt'
 
         score_path = os.path.join(os.path.dirname(perf_path), "midi_score.mid")
         score_ann_path = os.path.splitext(score_path)[0]+'_annotations.txt'
 
+
+        # not doing anything?
         with open(perf_ann_path) as f:
             perf_ann = [[x[0], x[2]] for x in f.read().splitlines()]
         with open(score_ann_path) as f:
             score_ann = [[x[0], x[2]] for x in f.read().splitlines()]
         
         
+        # getting and storing performance and score as MidiFile objects
         perf_mf = mido.MidiFile(perf_path)
         score_mf = mido.MidiFile(score_path)
 
+        # finding the performance specified by path and get performance_beats which is a list of all timestamps of the beats in
+        # the performance, and score_beats is the same for the score
         perf_beats = ASAP_ANNOTATIONS[path]["performance_beats"]
         score_beats = ASAP_ANNOTATIONS[path]["midi_score_beats"]
 
@@ -48,7 +55,7 @@ def parse_midi(path=None, id=None):
         offset = 0
         playing_note_times = {}
         
-        for msg in perf_mf:
+        for msg in perf_mf: # for each command in the midi file of the performance
 
             offset += msg.time
             for key in playing_note_times:
@@ -96,7 +103,7 @@ def parse_midi(path=None, id=None):
         playing_currently = 0
 
         
-        for msg in score_mf:
+        for msg in score_mf: # for each command in the score file
             offset += msg.time
             for key in playing_note_times:
                 playing_note_times[key] += msg.time
@@ -129,7 +136,7 @@ def parse_midi(path=None, id=None):
                     del playing_note_times[msg.note]
         
         
-        give_up = 0
+        give_up = 0 # NEVER BACK DOWN NEVER WHAT?????
 
         for pitch in score_notes:
             if pitch not in shifted_notes:
@@ -183,9 +190,10 @@ def parse_midi(path=None, id=None):
 
         return shifted_notes, score_notes, all_notes_and_data, missing
 
-# Midi_number, time_when_happens, matched?, velocity, link_to_flatlist(old), note_length_played, note_length_original, got_stop_signal?
 
-for i, row in METADATA.iterrows():
+# making and populating a text file for each piece with Midi_number, time_when_happens, matched?, velocity, link_to_flatlist(old),
+# note_length_played, note_length_original, got_stop_signal? all seperated by tabs 
+for i, row in METADATA.iterrows(): 
     print(f"Processing {row['midi_performance']}:  ", end="")
     processed_path = os.path.join(PROCESSED_PATH, row["midi_performance"])[:-4] + ".txt"
 

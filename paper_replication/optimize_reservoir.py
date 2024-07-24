@@ -3,6 +3,7 @@ import os
 import argparse
 import json
 import random
+from functools import wraps
 
 #import tensorflow
 #from tensorflow import keras
@@ -69,26 +70,36 @@ elif goal == "Len_P":
         ["Len_P"]
     )
 
-"""
-hyperopt_config = {
-    "exp": f"/stash/tlab/theom_intern/hyper_exp_data/{save_name}",    # the experimentation name
-    "hp_max_evals": 300,              # the number of differents sets of parameters hyperopt has to try
-    "hp_method": "random",            # the method used by hyperopt to chose those sets (see below)
-    "seed": 42,                       # the random state seed, to ensure reproducibility
-    "instances_per_trial": 5,         # how many random ESN will be tried with each sets of parameters
-    "hp_space": {                     # what are the ranges of parameters explored
-        "N": ["choice", 10, 20, 30, 50, 100, 200, 400, 600, 1000],             # the number of neurons is fixed to 500
-        "sr": ["loguniform", 1e-2, 10],   # the spectral radius is log-uniformly distributed between 1e-2 and 10
-        "lr": ["loguniform", 1e-3, 1],    # idem with the leaking rate, from 1e-3 to 1
-        "input_scaling": ["choice", 1.0], # the input scaling is fixed
-        "ridge": ["loguniform", 1e-8, 1e1],        # and so is the regularization parameter.
-        "seed": ["choice", 1234]          # an other random seed for the ESN initialization
-    }
-}
+def clean_nans(data, data_is_dict):
+    if data_is_dict:
+        for key in data:
+            is_nan = data[key].isnull().values.any()
+            if not is_nan:
+                continue
+            else:
+                data[key].pop()
+    else:
+        data.dropna()
 
-with open(f"/stash/tlab/theom_intern/hp_model_configs/{save_name}.config.json", "w+") as f:
-    json.dump(hyperopt_config, f)
-"""
+
+'''
+for key in trd:
+    is_nan = trd[key].isnull().values.any()
+    if not is_nan:
+        continue
+    else:
+        print('nan at: ', key)
+        break
+
+for key in trt:
+    is_nan = trt[key].isnull().values.any()
+    if not is_nan:
+        continue
+    else:
+        print('nan at: ', key)
+        break
+'''
+
 
 test_data_vel, test_goals_vel = prepare_dataset(
     data_path, metadata_path,
@@ -99,10 +110,54 @@ test_data_vel, test_goals_vel = prepare_dataset(
     sample_repeats=10
 )
 
-def objective(dataset, config, *, N, sr, lr, input_scaling, ridge, seed):
+
+def _elementwise(func):
+    """Vectorize a function to apply it
+    on arrays.
+    """
+    vect = np.vectorize(func)
+
+    @wraps(func)
+    def vect_wrapper(*args, **kwargs):
+        u = np.asanyarray(args)
+        v = vect(u)
+        return v[0]
+
+    return vect_wrapper
+
+
+@_elementwise
+def softplus(x: np.ndarray) -> np.ndarray:
+    return np.log(1 + np.exp(-np.abs(x))) + np.maximum(x,0)
+
+@_elementwise
+def hard_sigmoid(x: np.ndarray) -> np.ndarray:
+    if x <= -3:
+        return 0
+    if x >= 3:
+        return 1
+    return ((x/6) + .5)
+
+@_elementwise
+def relu_test(x: np.ndarray) -> np.ndarray:
+
+    if x < 0:
+        return 0.0
+    return x
+
+def objective(dataset, config, *, N, sr, lr, input_scaling, ridge, seed, rc_connectivity, input_connectivity, fb_connectivity):
     global current_run
     
     trd, trt, vad, vat = dataset
+
+    clean_nans(trd, True)
+    clean_nans(trt, True)
+    
+    clean_nans(vad, False)
+    clean_nans(vat, False)
+
+    clean_nans(test_data_vel, True)
+    clean_nans(test_goals_vel, True)
 
     trd_keys = list(trd.keys())
     random.Random(4).shuffle(trd_keys)
@@ -123,68 +178,72 @@ def objective(dataset, config, *, N, sr, lr, input_scaling, ridge, seed):
     losses = []
     r2s = []
     for i in range(instances):
-        model = create_model(input_scaling, N, sr, lr, ridge, trial_seed)
+        try:
+            model = create_model(input_scaling, N, sr, lr, ridge, trial_seed, rc_connectivity, input_connectivity, fb_connectivity, relu_test)
 
-        model.fit(trd, trt)
+            model.fit(trd, trt)
 
-        pieces = list(test_data_vel.keys())
-        print(len(pieces))
+            pieces = list(test_data_vel.keys())
+            print(len(pieces))
 
-        loss = 0
-        r2 = 0
+            loss = 0
+            r2 = 0
 
-        for i, piece in enumerate(pieces):
+            for i, piece in enumerate(pieces):
 
-            piece_data_vel = test_data_vel[piece]
+                piece_data_vel = test_data_vel[piece]
 
-            vad = np.squeeze(piece_data_vel.to_numpy())
-            #vad = piece_data_vel
-            piece_len = vad.shape[0]
+                vad = np.squeeze(piece_data_vel.to_numpy())
+                #vad = piece_data_vel
+                piece_len = vad.shape[0]
 
-            predictions = model.run(vad, reset=True)
+                predictions = model.run(vad, reset=True)
 
 
-            """
-            predictions = []
+                """
+                predictions = []
 
-            for row in range(len(vad)):
-                if goal == "Micro" and row > 0:
-                    vad.loc[row, "-1_Micro"] = float(out) 
-                inputs = vad.loc[row]
-                #if row < 3:
-                #    print(inputs)
+                for row in range(len(vad)):
+                    if goal == "Micro" and row > 0:
+                        vad.loc[row, "-1_Micro"] = float(out) 
+                    inputs = vad.loc[row]
+                    #if row < 3:
+                    #    print(inputs)
 
-                inputs = np.squeeze(inputs.to_numpy())
-                #if row < 3:
-                #    print(inputs)
+                    inputs = np.squeeze(inputs.to_numpy())
+                    #if row < 3:
+                    #    print(inputs)
 
-                out = model(inputs)[0]
-                predictions.append(out)
+                    out = model(inputs)[0]
+                    predictions.append(out)
 
-                #de = f"{ted.iloc[row]['Len_M']}"
-                #print(out)
-            """
+                    #de = f"{ted.iloc[row]['Len_M']}"
+                    #print(out)
+                """
 
-            a, b = [predictions[j][0] for j in range(len(predictions))], [test_goals_vel[piece].iloc[j]["Micro"] for j in range(len(predictions))]
+                a, b = [predictions[j][0] for j in range(len(predictions))], [test_goals_vel[piece].iloc[j]["Micro"] for j in range(len(predictions))]
+                
+                if i == 8:
+                    for j in range(len(predictions)):
+                        print(f"{a[j]}\t{b[j]}")
+                
+                loss += mse(a, b)
+                r2 += rsquare(b, a)
+
+                print(f"Piece {i}: {mse(a, b)}")
+
+                #print(f"Piece {i}: {loss}")
             
-            if i == 8:
-                for j in range(len(predictions)):
-                    print(f"{a[j]}\t{b[j]}")
-            
-            loss += mse(a, b)
-            r2 += rsquare(b, a)
+            loss /= len(pieces)
+            r2 /= len(pieces)
 
-            print(f"Piece {i}: {mse(a, b)}")
+            print(f"All pieces: {loss}")
 
-            #print(f"Piece {i}: {loss}")
-        
-        loss /= len(pieces)
-        r2 /= len(pieces)
-
-        print(f"All pieces: {loss}")
-
-        losses.append(loss)
-        r2s.append(r2)
+            losses.append(loss)
+            r2s.append(r2)
+        except ValueError:
+            losses.append(10000)
+            r2s.append(0)
 
         trial_seed += 1
 
@@ -214,10 +273,11 @@ if args.tune:
     best = research(objective, [trd, trt, vad, vat], f"/stash/tlab/theom_intern/distributed_reservoir_runs/{save_name}/{cpu_name}_hp_search/{cpu_name}.config.json")
     with open(f"/stash/tlab/theom_intern/distributed_reservoir_runs/{save_name}/{cpu_name}_hp_search/{cpu_name}_best_hps.txt", "a") as f:
         f.write(str(best))
-    fig = plot_hyperopt_report(f"/stash/tlab/theom_intern/distributed_reservoir_runs/{save_name}", ("lr", "sr", "ridge"), metric="loss")
-    fig.savefig("/stash/tlab/theom_intern/figure1.png")
-    #fig.show(block=True)
+    fig = plot_hyperopt_report(f"/stash/tlab/theom_intern/distributed_reservoir_runs/{save_name}", ("lr", "sr", "ridge", "rc_connectivity", "input_connectivity", "fb_connectivity"), metric="r2")
+    fig.savefig(f"/stash/tlab/theom_intern/distributed_reservoir_runs/{save_name}/figure1.png")
+    fig.show()
 elif not args.no_train:
+    #print(objective([trd,trt,vad,vat], {"instances_per_trial":2}, N=20, sr=8.10276339770031 , lr=0.01699826361489754, ridge=0.04191642154626806, rc_connectivity=0.14345098249172025, input_connectivity=0.27503492662184154, fb_connectivity=0.0011476015577360538, input_scaling=1.0, seed=1234))
     #print(objective([trd,trt,vad,vat], {"instances_per_trial":1}, N=1000, sr=1.028798288646009, lr=0.4809398365604778, ridge=4.99994379801419, input_scaling=1.0, seed=1234))
     print(objective([trd,trt,vad,vat], {"instances_per_trial":1}, N=1000, sr=0.6707490962802083, lr=0.31410658582869727, ridge=0.10645643230555085, input_scaling=1.0, seed=1234))
 if True:

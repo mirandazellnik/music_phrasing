@@ -15,7 +15,8 @@ argParser = argparse.ArgumentParser()
 argParser.add_argument("name", nargs="?", help="Name of this run, for logging, model saving, etc.", type=str)
 #argParser.add_argument("-c", help="Location of config file that this run uses")
 argParser.add_argument("-t", "--no-train", help="Don't train a new model, instead load the existing model.", action=argparse.BooleanOptionalAction)
-argParser.add_argument("-T", "--tune", help="Tune the model with hyperband.", action=argparse.BooleanOptionalAction)
+argParser.add_argument("-T", "--tune", help="Tune the model with hyperband.", action=argparse.BooleanOptionalAction) # QUESTION 
+# i thought we were using random search
 argParser.add_argument("-g", "--goal", help="Goal variable")
 args = argParser.parse_args()
 
@@ -33,19 +34,21 @@ if goal:
 
 
 hyperopt_config = {
-
     "exp": f"/stash/tlab/theom_intern/distributed_reservoir_runs/{save_name}",    # the experimentation name
-    "hp_max_evals": 200,              # the number of differents sets of parameters hyperopt has to try
-    "hp_method": "random",            # the method used by hyperopt to chose those sets (see below)
+    "hp_max_evals": 3,              # the number of differents sets of parameters hyperopt has to try
+    "hp_method": "tpe",            # the method used by hyperopt to chose those sets (see below)
     "seed": 42,                       # the random state seed, to ensure reproducibility
-    "instances_per_trial": 5,         # how many characteristics random ESN will be tried with each sets of parameters
+    "instances_per_trial": 2,         # how many characteristics random ESN will be tried with each sets of parameters
     "hp_space": {                     # what are the ranges of parameters explored
-        "N": ["choice", 1000],             # the number of neurons is fixed to 500
+        "N": ["choice", 20],             # the number of neurons is fixed to 500
         "sr": ["loguniform", 1e-3, 10],   # the spectral radius is log-uniformly distributed between 1e-2 and 10
-        "lr": ["loguniform", 1e-2, 1],    # idem with the leaking rate, from 1e-3 to 1
+        "lr": ["loguniform", 1e-3, 1],    # idem with the leaking rate, from 1e-3 to 1
         "input_scaling": ["choice", 1.0], # the input scaling is fixed
-        "ridge": ["loguniform", 1e-8, 1e1],        # and so is the regularization parameter.
-        "seed": ["choice", 1234]          # an other random seed for the ESN initialization
+        "ridge": ["loguniform", 1e-3, 1e1],        # and so is the regularization parameter.
+        "seed": ["choice", 1234],          # an other random seed for the ESN initialization
+        "rc_connectivity": ["loguniform", 1e-3, 1],
+        "input_connectivity": ["loguniform", 1e-2, 1],
+        "fb_connectivity": ["loguniform", 1e-3, 1e-2]
     }
 }
 
@@ -93,7 +96,9 @@ def create_configs(num_cpus, base_config_path, variable_parameter): # variable_p
 def gather_cpus(cpus_to_search):
     cpus = []
     for cpu in cpus_to_search:
+        #print(cpu)
         cpu_data = subprocess.run('ssh ' + cpu + ' w', shell=True, text=True, capture_output=True).stdout
+        #print(cpu_data)
         load_avg_string = re.search(r' load average: \d+.\d+', cpu_data)
         if not load_avg_string:
             print(f"{cpu}: {cpu_data}")
@@ -107,9 +112,10 @@ def correlate_cpus_and_configs(variable_parameter):
     # gets a list of unused cpus, creates different config files for each, then returns dictionary of each server and their
     # config file
     cpus_to_search = [
-    #    'arve',
-                      'birs', 'inn', 'kander', 'linth', 'lonza', 'orbe', 'reuss', 'rhine', 'rhone', 'saane',
-                       'thur', 'ticino']
+    # 'doubs',
+    # 'saane',
+    # 'kander',
+    'arve', 'birs', 'inn', 'linth', 'lonza', 'orbe', 'reuss', 'rhine', 'rhone', 'thur', 'ticino']
     cpus = gather_cpus(cpus_to_search)
     #cpus = ['arve', 'birs', 'inn', 'kander']
     num_cpus = len(cpus)
