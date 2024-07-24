@@ -3,6 +3,8 @@ import pandas
 import random
 import copy
 
+# handles getting the features from the processed/aligned data along with extract_features, where the processed data is made in
+# process_midi
 def prepare_dataset(data_path, metadata_path, columns_with_hist, columns_without_hist, goal_columns, test_data_only = False, train_by_piece = False):
     data = json.load(open(data_path))
     df = pandas.read_csv(metadata_path)

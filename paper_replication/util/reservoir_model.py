@@ -7,27 +7,42 @@ from tensorflow import keras
 import keras_tuner
 import pickle
 import numpy as np
+from functools import wraps
 
 from reservoirpy.nodes import Reservoir, Ridge, ESN # type: ignore
 
-from util.load_data import prepare_dataset
 
-def create_model(input_scaling, N, sr, lr, ridge, seed):
+def create_model(input_scaling, N, sr, lr, ridge, seed, rc_connectivity=0.1, input_connectivity=0.1, fb_connectivity=0.1, activation_func='tanh'):
         
     reservoir = Reservoir(
             units=N,
             sr=sr,
             lr=lr,
             input_scaling=input_scaling,
-            seed=seed
+            seed=seed,
+            rc_connectivity=rc_connectivity,
+            input_connectivity=input_connectivity,
+            fb_connectivity=fb_connectivity,
+            activation=activation_func
         )
+
+    print('units: ', N)
+    print('sr: ', sr)
+    print('lr: ', lr)
+    print('input scaling: ', input_scaling)
+    print('seed: ', seed)
+    print('rc_connectivity: ', rc_connectivity)
+    print('input connectivity: ', input_connectivity)
+    print('fb_connectivity: ', fb_connectivity)
+    print('activation: ', activation_func)
+    print('ridge: ', ridge)
 
     #reservoirs = [Reservoir(100, lr=lr, sr=sr) for i in num_inputs]
     #print(f"{len(reservoirs)} Res[]s")
     ridge = Ridge(ridge=ridge)
 
     #esn = reservoir >> ridge
-    esn = ESN(reservoir=reservoir, readout=ridge, workers=-1)
+    esn = ESN(reservoir=reservoir, readout=ridge, workers=-1, feedback=True)
 
     return esn
 
