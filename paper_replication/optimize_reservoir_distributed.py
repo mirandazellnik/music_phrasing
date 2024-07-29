@@ -36,7 +36,7 @@ if goal:
 hyperopt_config = {
     "exp": f"/stash/tlab/theom_intern/distributed_reservoir_runs/{save_name}",    # the experimentation name
     "hp_max_evals": 3,              # the number of differents sets of parameters hyperopt has to try
-    "hp_method": "tpe",            # the method used by hyperopt to chose those sets (see below)
+    "hp_method": "random",            # the method used by hyperopt to chose those sets (see below)
     "seed": 42,                       # the random state seed, to ensure reproducibility
     "instances_per_trial": 2,         # how many characteristics random ESN will be tried with each sets of parameters
     "hp_space": {                     # what are the ranges of parameters explored

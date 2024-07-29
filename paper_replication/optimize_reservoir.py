@@ -244,6 +244,21 @@ def objective(dataset, config, *, N, sr, lr, input_scaling, ridge, seed, rc_conn
         except ValueError:
             losses.append(10000)
             r2s.append(0)
+            error_hps = {
+                "current_run_num": current_run,
+                "input_scaling": input_scaling,
+                "neuron_num": N,
+                "spectral_radius": sr,
+                "leak_rate": lr,
+                "ridge": ridge,
+                "trial_seed": trial_seed,
+                "rc_connectivity": rc_connectivity,
+                "input_connectivity": input_connectivity,
+                "fb_connectivity": fb_connectivity
+            }
+            with open(f"/stash/tlab/theom_intern/distributed_reservoir_runs/{save_name}/{cpu_name}_hp_search/errors.json", "a") as f:
+                json.dump(error_hps, f)
+                f.write('\n')
 
         trial_seed += 1
 
