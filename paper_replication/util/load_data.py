@@ -5,7 +5,7 @@ import copy
 
 # handles getting the features from the processed/aligned data along with extract_features, where the processed data is made in
 # process_midi
-def prepare_dataset(data_path, metadata_path, columns_with_hist, columns_without_hist, goal_columns, test_data_only = False, train_by_piece = False, sample_repeats = 1):
+def prepare_dataset(data_path, metadata_path, columns_with_hist, columns_without_hist, goal_columns, test_data_only = False, train_by_piece = False, val_by_piece=False, sample_repeats = 1):
 
     data = json.load(open(data_path))
     df = pandas.read_csv(metadata_path)
@@ -103,9 +103,12 @@ def prepare_dataset(data_path, metadata_path, columns_with_hist, columns_without
             print(f"Missing piece! {md[0][0]} {md[0][1]}")
         
     train_df, val_df, test_df = list(map(pandas.DataFrame, [train_samples, val_samples, test_samples]))
+    
     test_dfs = {piece_name: pandas.DataFrame(samples) for piece_name, samples in test_samples_by_piece.items()}
+    val_dfs = {piece_name: pandas.DataFrame(samples) for piece_name, samples in val_samples_by_piece.items()}
     train_dfs = {piece_name: pandas.DataFrame(samples) for piece_name, samples in train_samples_by_piece.items()}
     test_gs = {}
+    val_gs = {}
     train_gs = {}
 
     train_targets = pandas.concat([train_df.pop(x) for x in goal_columns], axis=1)
@@ -113,6 +116,8 @@ def prepare_dataset(data_path, metadata_path, columns_with_hist, columns_without
     test_targets = pandas.concat([test_df.pop(x) for x in goal_columns], axis=1)
     for d in test_dfs:
         test_gs[d] = pandas.concat([test_dfs[d].pop(x) for x in goal_columns], axis=1)
+    for d in val_dfs:
+        val_gs[d] = pandas.concat([val_dfs[d].pop(x) for x in goal_columns], axis=1)
     for d in train_dfs:
         train_gs[d] = pandas.concat([train_dfs[d].pop(x) for x in goal_columns], axis=1)
 
@@ -120,7 +125,15 @@ def prepare_dataset(data_path, metadata_path, columns_with_hist, columns_without
 
     if test_data_only:
         return test_dfs, test_gs
-    elif not train_by_piece:
-        return train_df, train_targets, val_df, val_targets, test_df, test_targets
+
+    returnitems = []
+
+    if train_by_piece:
+        returnitems += [train_dfs, train_gs]
     else:
-        return train_dfs, train_gs, val_df, val_targets, test_df, test_targets
+        returnitems += [train_df, train_targets]
+    if val_by_piece:
+        returnitems += [val_dfs, val_gs]
+    else:
+        returnitems += [val_df, val_targets]
+    return returnitems + [test_df, test_targets]
