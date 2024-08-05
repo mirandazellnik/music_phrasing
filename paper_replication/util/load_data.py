@@ -66,7 +66,7 @@ def prepare_dataset(data_path, metadata_path, columns_with_hist, columns_without
         val_pieces.extend(pieces[1])
         test_pieces.extend(pieces[2])
 
-    train_samples, val_samples, test_samples, train_samples_by_piece, test_samples_by_piece = {}, {}, {}, {}, {}
+    train_samples, val_samples, test_samples, train_samples_by_piece, val_samples_by_piece, test_samples_by_piece = {}, {}, {}, {}, {}, {}
 
     for perf_name in data:
         md = df.loc[df['midi_performance'] == perf_name].values
@@ -86,6 +86,7 @@ def prepare_dataset(data_path, metadata_path, columns_with_hist, columns_without
             for k in data_wanted:
                 train_samples[k] += data_wanted[k]
         elif f"{md[0][0]} {md[0][1]}" in val_pieces:
+            val_samples_by_piece[perf_name] = copy.deepcopy(data_wanted)
             if not val_samples:
                 val_samples = data_wanted
                 continue
