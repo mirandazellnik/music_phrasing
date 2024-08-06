@@ -12,7 +12,7 @@ from functools import wraps
 from reservoirpy.nodes import Reservoir, Ridge, ESN # type: ignore
 
 
-def create_model(input_scaling, N, sr, lr, ridge, seed, rc_connectivity=0.1, input_connectivity=0.1, fb_connectivity=0.1, activation_func='tanh'):
+def create_model(input_scaling, N, sr, lr, ridge, seed, rc_connectivity=0.1, input_connectivity=0.1, activation_func='relu'):
         
     reservoir = Reservoir(
             units=N,
@@ -22,7 +22,6 @@ def create_model(input_scaling, N, sr, lr, ridge, seed, rc_connectivity=0.1, inp
             seed=seed,
             rc_connectivity=rc_connectivity,
             input_connectivity=input_connectivity,
-            fb_connectivity=fb_connectivity,
             activation=activation_func
         )
 
@@ -33,7 +32,6 @@ def create_model(input_scaling, N, sr, lr, ridge, seed, rc_connectivity=0.1, inp
     print('seed: ', seed)
     print('rc_connectivity: ', rc_connectivity)
     print('input connectivity: ', input_connectivity)
-    print('fb_connectivity: ', fb_connectivity)
     print('activation: ', activation_func)
     print('ridge: ', ridge)
 
@@ -42,7 +40,7 @@ def create_model(input_scaling, N, sr, lr, ridge, seed, rc_connectivity=0.1, inp
     ridge = Ridge(ridge=ridge)
 
     #esn = reservoir >> ridge
-    esn = ESN(reservoir=reservoir, readout=ridge, workers=-1, feedback=True)
+    esn = ESN(reservoir=reservoir, readout=ridge, workers=-1, feedback=False)
 
     return esn
 

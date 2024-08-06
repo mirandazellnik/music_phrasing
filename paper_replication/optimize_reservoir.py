@@ -60,7 +60,7 @@ if goal == "Micro":
         ["Len_M", "Melodic_Charge", "Micro"],
         ["Micro"],
         train_by_piece=True,
-        sample_repeats=10
+        sample_repeats=5
     )
 elif goal == "Len_P":
     trd, trt, vad, vat, ted, tet = prepare_dataset(
@@ -107,7 +107,7 @@ test_data_vel, test_goals_vel = prepare_dataset(
     ["Len_M", "Melodic_Charge", "Micro"],
     ["Micro"],
     test_data_only=True,
-    sample_repeats=10
+    sample_repeats=5
 )
 
 
@@ -145,7 +145,7 @@ def relu_test(x: np.ndarray) -> np.ndarray:
         return 0.0
     return x
 
-def objective(dataset, config, *, N, sr, lr, input_scaling, ridge, seed, rc_connectivity, input_connectivity, fb_connectivity):
+def objective(dataset, config, *, N, sr, lr, input_scaling, ridge, seed, rc_connectivity, input_connectivity):
     global current_run
     
     trd, trt, vad, vat = dataset
@@ -179,7 +179,7 @@ def objective(dataset, config, *, N, sr, lr, input_scaling, ridge, seed, rc_conn
     r2s = []
     for i in range(instances):
         try:
-            model = create_model(input_scaling, N, sr, lr, ridge, trial_seed, rc_connectivity, input_connectivity, fb_connectivity, relu_test)
+            model = create_model(input_scaling, N, sr, lr, ridge, trial_seed, rc_connectivity, input_connectivity, relu_test)
 
             model.fit(trd, trt)
 
@@ -253,8 +253,7 @@ def objective(dataset, config, *, N, sr, lr, input_scaling, ridge, seed, rc_conn
                 "ridge": ridge,
                 "trial_seed": trial_seed,
                 "rc_connectivity": rc_connectivity,
-                "input_connectivity": input_connectivity,
-                "fb_connectivity": fb_connectivity
+                "input_connectivity": input_connectivity
             }
             with open(f"/stash/tlab/theom_intern/distributed_reservoir_runs/{save_name}/{cpu_name}_hp_search/errors.json", "a") as f:
                 json.dump(error_hps, f)
@@ -288,13 +287,17 @@ if args.tune:
     best = research(objective, [trd, trt, vad, vat], f"/stash/tlab/theom_intern/distributed_reservoir_runs/{save_name}/{cpu_name}_hp_search/{cpu_name}.config.json")
     with open(f"/stash/tlab/theom_intern/distributed_reservoir_runs/{save_name}/{cpu_name}_hp_search/{cpu_name}_best_hps.txt", "a") as f:
         f.write(str(best))
-    fig = plot_hyperopt_report(f"/stash/tlab/theom_intern/distributed_reservoir_runs/{save_name}", ("lr", "sr", "ridge", "rc_connectivity", "input_connectivity", "fb_connectivity"), metric="r2")
+    fig = plot_hyperopt_report(f"/stash/tlab/theom_intern/distributed_reservoir_runs/{save_name}", ("lr", "sr", "ridge", "rc_connectivity", "input_connectivity"), metric="r2")
     fig.savefig(f"/stash/tlab/theom_intern/distributed_reservoir_runs/{save_name}/figure1.png")
     fig.show()
 elif not args.no_train:
     #print(objective([trd,trt,vad,vat], {"instances_per_trial":2}, N=20, sr=8.10276339770031 , lr=0.01699826361489754, ridge=0.04191642154626806, rc_connectivity=0.14345098249172025, input_connectivity=0.27503492662184154, fb_connectivity=0.0011476015577360538, input_scaling=1.0, seed=1234))
     #print(objective([trd,trt,vad,vat], {"instances_per_trial":1}, N=1000, sr=1.028798288646009, lr=0.4809398365604778, ridge=4.99994379801419, input_scaling=1.0, seed=1234))
     print(objective([trd,trt,vad,vat], {"instances_per_trial":1}, N=1000, sr=0.6707490962802083, lr=0.31410658582869727, ridge=0.10645643230555085, input_scaling=1.0, seed=1234))
+
+if not args.tune:
+    objective([trd, trt, vad, vat], {"instances_per_trial":1},  N=1000, sr=0.0481225754006839, lr=0.4705157077721695, ridge=1.031359937607915, input_scaling=1.0, seed=1234, rc_connectivity=0.1628697276756572,  input_connectivity=0.22310893747435143)
+
 if True:
     pass
 elif not args.no_train:
