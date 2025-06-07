@@ -12,8 +12,14 @@ python3 -m pipenv shell
 conda activate tf
 cd ../../paper_replication/
 
+NEW METHOD:
+cd ~/music_phrasing
+virtualenv venv
+
 MC (melodic_charge)
 PH (note)
 ND (Len_M)
 
 summer results: my_model_4
+
+

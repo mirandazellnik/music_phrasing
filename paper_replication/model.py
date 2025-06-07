@@ -1,4 +1,5 @@
 import sys
+import os
 import argparse
 
 import tensorflow
@@ -6,6 +7,7 @@ from tensorflow import keras
 import keras_tuner
 import pickle
 import numpy as np
+from keras import backend as K
 
 from util.load_data import prepare_dataset
 
@@ -33,11 +35,11 @@ assert goal in ["Micro", "Len_P"]
 
 print("Preparing dataset...")
 if goal == "Micro":
-    trd, trt, vad, vat, ted, tet = prepare_dataset(
+    trd, trt, ted, tet, vad, vat = prepare_dataset(
         data_path, metadata_path,
-        ["Note", "Exact_L", "Len/BPM", "Exact_H", "Motion", "Micro"],
-        ["Len_M", "Melodic_Charge", "W.50", "B.10", "B.50", "A.10", "A.50", "W.50"],
-        ["Micro"]
+        ["Note", "Exact_L", "Len/BPM"],
+        ["Len_M", "Melodic_Charge", "Micro"],
+        ["Micro"],
     )
     """
     trd, trt, vad, vat, ted, tet = prepare_dataset(
@@ -59,19 +61,22 @@ tensorboard = keras.callbacks.TensorBoard(f"/stash/tlab/theom_intern/ts_logs/{sa
 def create_model(first_layer, second_layer, dropout_1, dropout_2, lr):
     
     normalizer = keras.layers.Normalization(axis=-1)
-    normalizer.adapt(trd)
+    normalizer.adapt(trd.to_numpy())
+
 
     model = keras.models.Sequential()
 
     model.add(normalizer)
     model.add(keras.layers.Dense(first_layer, activation='relu'))
-    model.add(keras.layers.Dropout(dropout_1))
-    if second_layer:
-        model.add(keras.layers.Dense(second_layer, activation='relu'))
-        model.add(keras.layers.Dropout(dropout_2))
+    #model.add(keras.layers.Dropout(dropout_1))
+    #if second_layer:
+    #    model.add(keras.layers.Dense(second_layer, activation='relu'))
+    #    model.add(keras.layers.Dropout(dropout_2))
     model.add(keras.layers.Dense(1, activation='linear'))
 
-    model.compile(loss='mse', optimizer=keras.optimizers.Adam(lr=lr), metrics=None)
+
+
+    model.compile(loss='mse', optimizer=keras.optimizers.Adam(learning_rate=lr), metrics=None)
 
     return model
 
@@ -121,18 +126,48 @@ else:
             model = create_model(80, 80, .2, .2, 4.8276e-5)
             model.fit(trd, trt, validation_data=(vad, vat), epochs=5, batch_size=32, verbose=2, callbacks=[tensorboard] if save_name else [])
             models.append(model)
-        model.save(f"/stash/tlab/theom_intern/models/{save_name}/{goal}")
+        os.makedirs(f"/stash/tlab/theom_intern/models/{save_name}/{goal}")
+        model.save(f"/stash/tlab/theom_intern/models/{save_name}/{goal}/model.keras")
 
-    model = keras.models.load_model(f"/stash/tlab/theom_intern/models/{save_name}/{goal}")
+    model = keras.models.load_model(f"/stash/tlab/theom_intern/models/{save_name}/{goal}/model.keras")
 
-    for row in range(0, 600):
-        if goal == "Micro" and row > 0:
-            ted.loc[row, "-1_Micro"] = float(out) 
-        inputs = ted.loc[row]
+    loss = 0
+    loss_nomodel = 0
+    outs = []
+    exps = []
+
+    for row in range(0, 24466):
+        #if goal == "Micro" and row > 0:
+        #    ted.loc[row, "-1_Micro"] = float(out) 
+        inputs = ted.loc[row].to_numpy()
+        inputs = inputs[np.newaxis, :]
+        
         if row == 0:
             print(inputs)
 
         out = model(inputs)[0][0]
         exp = f"{tet.iloc[row]['Micro']}"
         #de = f"{ted.iloc[row]['Len_M']}"
-        print(f"{exp}\t{out}")
+        #print(f"{exp}\t{out}")
+        loss += (float(exp) - float(out))**2
+        loss_nomodel += (float(exp))**2
+        outs.append(float(out))
+        exps.append(float(exp))
+
+    loss /= 24466
+    loss_nomodel /= 24466
+    print(f"MSE: {loss}")
+    print(f"MSE(no model): {loss_nomodel}")
+
+    def coeff_determination(y_true, y_pred):
+        SS_res =  sum([(y_true[i]-y_pred[i])**2 for i in range(len(y_true))])
+        SS_tot =  sum([(y_true[i]-(sum(y_true)/len(y_true)))**2 for i in range(len(y_true))])
+        return ( 1 - SS_res/(SS_tot) )
+    
+    r2 = coeff_determination(exps, outs)
+    print(f"r2: {r2}")
+
+    r2_no = coeff_determination(exps, [0 for i in range(len(exps))])
+    print(f"r2_no: {r2_no}")
+    
+

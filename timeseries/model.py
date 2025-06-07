@@ -118,7 +118,9 @@ else:
 
     model = keras.models.load_model(f"/stash/tlab/theom_intern/models/{save_name}/{goal}")
 
-    for row in range(0, 600):
+    loss = 0
+
+    for row in range(0, 27203):
         if goal == "Micro" and row > 0:
             ted.loc[row, "-1_Micro"] = float(out) 
         inputs = ted.loc[row]
@@ -129,4 +131,8 @@ else:
         exp = f"{tet.iloc[row]['Micro']}"
         #de = f"{ted.iloc[row]['Len_M']}"
         print(f"{exp}\t{out}")
+        loss += (exp - out)**2
+    
+    loss /= 27203
+    print(loss)
 

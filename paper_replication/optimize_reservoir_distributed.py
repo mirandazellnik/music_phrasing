@@ -46,8 +46,8 @@ hyperopt_config = {
         "input_scaling": ["choice", 1.0], # the input scaling is fixed
         "ridge": ["loguniform", 1e-3, 1e1],        # and so is the regularization parameter.
         "seed": ["choice", 1234],          # an other random seed for the ESN initialization
-        "rc_connectivity": ["loguniform", 1e-4, 1],
-        "input_connectivity": ["loguniform", 1e-2, 1],
+        # "rc_connectivity": ["loguniform", 1e-4, 1],
+        # "input_connectivity": ["loguniform", 1e-2, 1],
     }
 }
 
@@ -114,7 +114,7 @@ def correlate_cpus_and_configs(variable_parameter):
     'doubs',
     'saane',
     'kander',
-    'arve', 'birs', 'inn', 'linth', 'lonza', 'orbe', 'reuss', 'rhine', 'rhone', 'thur', 'ticino']
+    'arve', 'birs', 'orbe', 'reuss', 'rhine', 'rhone', 'thur', 'ticino']
     cpus = gather_cpus(cpus_to_search)
     #cpus = ['orbe','ticino','rhone']
     num_cpus = len(cpus)
@@ -142,11 +142,9 @@ def run_file_on_cpu(cpu_name, file_path, session_name, terminal_args): # file pa
     # does not return anything
     subprocess.run('tmux new-window -S -n ' + cpu_name + '_window', shell=True)
     
-    commands_t = ["cd ~/music_phrasing/tests/word_based",
-                "python3 -m pipenv shell",
-                # ". /u/theom_intern/.local/share/virtualenvs/word_based-6MIe0CKq/bin/activate",
-                "conda activate tf",
-                "cd ../../paper_replication/"]
+    commands_t = ["cd ~/music_phrasing",
+                "source venv/bin/activate",
+                "cd paper_replication"]
     commands_b = ["conda activate music_phrasing_env"]
 
     if os.getlogin() == "theom_intern":

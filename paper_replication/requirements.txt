@@ -1,0 +1,8 @@
+reservoirpy
+numpy
+pandas
+mido
+seaborn
+matplotlib
+music21
+tensorflow
